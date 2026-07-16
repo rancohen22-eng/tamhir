@@ -249,6 +249,7 @@
 <!-- ── מודל עריכת הלוואה ── -->
 <div id="editor" class="modal hidden"></div>
 <div id="ioModal" class="modal hidden"></div>
+<div id="importModal" class="modal hidden"></div>
 
 <script>
 /* ══════════════════════════ קונפיגורציה ══════════════════════════ */
@@ -359,12 +360,14 @@ async function saveData(){
 /* מחזיר מערך שורות: {seq,date,opening,payment,principal,interest,closing} */
 function buildSchedule(loan){
   if(loan.scheduleOverride && loan.scheduleOverride.length){
-    // לוח ידני — משלים יתרות
-    let bal = num(loan.principal);
+    // לוח מיובא/ידני — משתמש בעמודות שנמסרו, ומשלים יתרות חסרות
+    let prev = num(loan.principal);
     return loan.scheduleOverride.map((r,i)=>{
       const p=num(r.principal), int=num(r.interest);
-      const opening=bal; bal=Math.max(0,bal-p);
-      return {seq:i+1, date:r.date, opening, payment:p+int, principal:p, interest:int, closing:bal, manual:true};
+      const opening = (r.opening!=null && r.opening!=='') ? num(r.opening) : prev;
+      const closing = (r.balance!=null && r.balance!=='') ? num(r.balance) : Math.max(0, opening - p);
+      prev = closing;
+      return {seq:i+1, date:r.date, opening, payment:p+int, principal:p, interest:int, closing, manual:true};
     });
   }
   const P = num(loan.principal);
@@ -763,8 +766,10 @@ async function pullAllBOI(btn){
 }
 
 /* ══════════════════════════ עריכת הלוואה ══════════════════════════ */
+let EDIT_OVERRIDE = null; // לוח מיובא בזמן עריכה (מערך שורות {date,principal,interest,opening,balance})
 function openEditor(id){
   const l = id ? DATA.loans.find(x=>x.id===id) : {currency:'ILS', method:'spitzer', rateType:'fixed', paymentFreq:'month'};
+  EDIT_OVERRIDE = (l.scheduleOverride && l.scheduleOverride.length) ? l.scheduleOverride.slice() : null;
   const curOpts = CURRENCIES.map(c=>`<option value="${c}" ${l.currency===c?'selected':''}>${c} ${CUR_SYMBOL[c]}</option>`).join('');
   const methOpts = Object.entries(METHODS).map(([k,v])=>`<option value="${k}" ${l.method===k?'selected':''}>${v}</option>`).join('');
   const rtOpts = Object.entries(RATE_TYPES).map(([k,v])=>`<option value="${k}" ${l.rateType===k?'selected':''}>${v}</option>`).join('');
@@ -805,6 +810,13 @@ function openEditor(id){
         <div class="field"><label>מטרה</label><input id="f_purpose" value="${esc(l.purpose||'')}"></div>
       </div>
       <div class="frow one"><div class="field"><label>הערות</label><textarea id="f_notes">${esc(l.notes||'')}</textarea></div></div>
+      <div class="frow one"><div class="field">
+        <label>לוח סילוקין</label>
+        <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+          <button type="button" class="btn sec" style="padding:8px 14px" onclick="openImport()">⬆ העלאת לוח (Excel / CSV / PDF)</button>
+          <span id="ovStatus" style="font-size:12.5px;color:var(--muted)"></span>
+        </div>
+      </div></div>
       <div class="frow one"><div class="field"><label>תצוגה מקדימה של הלוח</label>
         <div id="prev" style="font-size:12.5px;color:var(--muted)"></div></div></div>
     </div>
@@ -815,8 +827,16 @@ function openEditor(id){
     </div></div>`;
   m.classList.remove('hidden');
   ['f_principal','f_term','f_rate','f_freq','f_method','f_grace','f_start'].forEach(fid=>{ const e=$(fid); if(e) e.oninput=updatePrev; if(e)e.onchange=updatePrev; });
+  refreshOvStatus();
   updatePrev();
 }
+function refreshOvStatus(){
+  const el=$('ovStatus'); if(!el) return;
+  if(EDIT_OVERRIDE && EDIT_OVERRIDE.length){
+    el.innerHTML = `✓ נטען לוח מיובא — <b>${EDIT_OVERRIDE.length}</b> שורות (דורס את החישוב) · <a href="#" onclick="clearOverride();return false" style="color:var(--danger)">הסרה</a>`;
+  } else { el.textContent = 'לא הועלה לוח — הלוח מחושב אוטומטית מהתנאים למעלה.'; }
+}
+function clearOverride(){ EDIT_OVERRIDE=null; refreshOvStatus(); updatePrev(); }
 function rtChange(){ $('primeHelp').style.display = $('f_rt').value==='prime'?'':'none'; }
 function applyPrime(){ const m=parseFloat($('f_margin').value); if(isFinite(m)){ $('f_rate').value=(DATA.settings.prime+m).toFixed(2); updatePrev(); } }
 function collectForm(id){
@@ -828,21 +848,26 @@ function collectForm(id){
     graceMonths:num($('f_grace').value), rateType:$('f_rt').value, annualRate:num($('f_rate').value),
     margin: $('f_margin')?num($('f_margin').value):undefined,
     collateral:$('f_coll').value.trim(), purpose:$('f_purpose').value.trim(), notes:$('f_notes').value.trim(),
-    scheduleOverride: (id && DATA.loans.find(x=>x.id===id)||{}).scheduleOverride
+    scheduleOverride: (EDIT_OVERRIDE && EDIT_OVERRIDE.length) ? EDIT_OVERRIDE : undefined
   };
 }
 function updatePrev(){
   try{
-    const l=collectForm(null); if(!l.principal||!l.termMonths){ $('prev').textContent='הזינו קרן ותקופה לתצוגה מקדימה'; return; }
+    const l=collectForm(null);
+    const hasOv = EDIT_OVERRIDE && EDIT_OVERRIDE.length;
+    if(!hasOv && (!l.principal||!l.termMonths)){ $('prev').textContent='הזינו קרן ותקופה לתצוגה מקדימה'; return; }
+    if(hasOv && !l.principal){ $('prev').textContent='לוח מיובא נטען — הזינו גם "קרן מקורית" לחישוב יתרות נכון.'; return; }
     const sch=buildSchedule(l); const first=sch[0], last=sch[sch.length-1];
     const totI=sch.reduce((s,r)=>s+r.interest,0);
-    $('prev').innerHTML = `${sch.length} תשלומים · תשלום ראשון ${fmtDate(first.date)} (${money(first.payment,l.currency)}) · סיום ${fmtDate(last.date)} · סה"כ ריבית ${money(totI,l.currency)}`;
+    $('prev').innerHTML = `${hasOv?'לוח מיובא · ':''}${sch.length} תשלומים · ראשון ${fmtDate(first.date)} (${money(first.payment,l.currency)}) · סיום ${fmtDate(last.date)} · סה"כ ריבית ${money(totI,l.currency)}`;
   }catch(e){ $('prev').textContent='—'; }
 }
 async function saveLoan(id){
   const l=collectForm(id);
+  const hasOv = l.scheduleOverride && l.scheduleOverride.length;
   if(!l.name){ alert('נא להזין שם הלוואה'); return; }
-  if(!l.principal||!l.termMonths){ alert('נא להזין קרן ותקופה'); return; }
+  if(!l.principal){ alert('נא להזין קרן מקורית'); return; }
+  if(!hasOv && !l.termMonths){ alert('נא להזין תקופה (או להעלות לוח סילוקין)'); return; }
   const i=DATA.loans.findIndex(x=>x.id===id);
   if(i>=0) DATA.loans[i]=l; else DATA.loans.push(l);
   await saveData(); closeModal('editor'); renderAll();
@@ -881,6 +906,277 @@ function importEncrypted(inp){
     }catch(e){ alert('ייבוא נכשל — ודאו שהקובץ תואם והסיסמה זהה.'); }
   };
   rd.readAsText(file);
+}
+
+/* ══════════════════════════ העלאת לוח סילוקין (Excel / CSV / PDF) ══════════════════════════ */
+let IMPORT_GRID = null;         // מערך שורות (מערכי תאים) לאחר קריאת הקובץ
+const ROLES = { ignore:'— התעלם —', date:'תאריך', principal:'קרן', interest:'ריבית', payment:'תשלום', balance:'יתרה' };
+
+function openImport(){
+  const m=$('importModal');
+  m.innerHTML = `<div class="box" style="max-width:760px"><div class="mhead"><h2>העלאת לוח סילוקין</h2><button class="x" onclick="closeModal('importModal')">×</button></div>
+    <div class="mbody">
+      <p style="font-size:13.5px;color:var(--muted);margin-top:0">העלו קובץ <b>Excel (.xlsx)</b>, <b>CSV</b> או <b>PDF</b> של לוח הסילוקין מהבנק — או הדביקו את הטבלה. לאחר מכן סמנו איזו עמודה היא תאריך / קרן / ריבית / יתרה.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:10px">
+        <label class="btn sec" style="cursor:pointer">⬆ בחירת קובץ<input type="file" accept=".csv,.xlsx,.xls,.pdf,text/csv" style="display:none" onchange="importPickFile(this)"></label>
+        <span style="font-size:12.5px;color:var(--muted)">או הדביקו טבלה למטה:</span>
+      </div>
+      <textarea id="pasteBox" placeholder="הדביקו כאן שורות מהאקסל / PDF (מופרדות בטאב, פסיק או רווחים)…" style="width:100%;min-height:70px;font-size:12.5px;border:1px solid var(--line);border-radius:9px;padding:8px" oninput="importPasteDebounced()"></textarea>
+      <div id="importErr" class="note hidden"></div>
+      <div id="mapArea" class="hidden">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;margin:10px 0"><input type="checkbox" id="hasHeader" onchange="renderMapPreview()"> השורה הראשונה היא כותרת (דלגו עליה)</label>
+        <div class="tblwrap" style="max-height:320px;overflow:auto"><table class="grid" id="mapTbl"></table></div>
+        <div id="mapSummary" style="font-size:12.5px;color:var(--muted);margin-top:8px"></div>
+      </div>
+    </div>
+    <div class="mfoot">
+      <button class="btn pri" id="applyImpBtn" onclick="applyImport()" disabled>החלת הלוח</button>
+      <button class="btn sec" onclick="closeModal('importModal')">ביטול</button>
+    </div></div>`;
+  m.classList.remove('hidden');
+  IMPORT_GRID=null;
+}
+
+/* --- קריאת קבצים --- */
+function importPickFile(inp){
+  const f=inp.files[0]; if(!f) return;
+  const name=f.name.toLowerCase();
+  importErr('');
+  if(name.endsWith('.csv')){ f.text().then(t=>gridReady(parseDelimited(t))).catch(e=>importErr('שגיאה בקריאת CSV: '+e.message)); }
+  else if(name.endsWith('.xlsx')||name.endsWith('.xls')){ f.arrayBuffer().then(readXLSX).then(gridReady).catch(e=>importErr('שגיאה בקריאת Excel: '+e.message+' — נסו לשמור כ-CSV.')); }
+  else if(name.endsWith('.pdf')){ importErr('קורא PDF… (טעינה ראשונית עשויה לקחת רגע)'); f.arrayBuffer().then(readPDF).then(g=>{importErr('');gridReady(g);}).catch(e=>importErr('שגיאה בקריאת PDF: '+e.message+' — נסו Excel/CSV או הדבקה ידנית.')); }
+  else importErr('סוג קובץ לא נתמך. השתמשו ב-xlsx / csv / pdf.');
+}
+let _pasteT=null;
+function importPasteDebounced(){ clearTimeout(_pasteT); _pasteT=setTimeout(()=>{ const t=$('pasteBox').value.trim(); if(t.length>3){ gridReady(parseDelimited(t)); } },400); }
+function importErr(msg){ const e=$('importErr'); if(!e)return; if(msg){ e.textContent=msg; e.classList.remove('hidden'); } else e.classList.add('hidden'); }
+
+/* --- מפריד גמיש: טאב / פסיק / נקודה-פסיק / רווחים מרובים --- */
+function parseDelimited(text){
+  const lines=text.replace(/\r/g,'').split('\n').filter(l=>l.trim()!=='');
+  if(!lines.length) return [];
+  let delim='\t';
+  if(lines[0].includes('\t')) delim='\t';
+  else if(lines[0].includes(';')) delim=';';
+  else if(lines[0].includes(',')) delim=',';
+  else delim=/\s{2,}/; // רווחים מרובים
+  return lines.map(l=>{
+    if(delim instanceof RegExp) return l.trim().split(delim);
+    // תמיכה בציטוטים עבור CSV
+    if(delim===','){ return splitCSVLine(l); }
+    return l.split(delim);
+  }).map(r=>r.map(c=>String(c).trim()));
+}
+function splitCSVLine(line){
+  const out=[]; let cur='', q=false;
+  for(let i=0;i<line.length;i++){ const c=line[i];
+    if(q){ if(c==='"'){ if(line[i+1]==='"'){cur+='"';i++;} else q=false; } else cur+=c; }
+    else { if(c==='"')q=true; else if(c===','){out.push(cur);cur='';} else cur+=c; } }
+  out.push(cur); return out;
+}
+
+/* --- קורא XLSX עצמאי (unzip דרך DecompressionStream) --- */
+function colIdx(ref){ const m=String(ref).match(/^[A-Z]+/); if(!m)return 0; let n=0; for(const ch of m[0]) n=n*26+(ch.charCodeAt(0)-64); return n-1; }
+async function inflateRaw(u8){
+  if(typeof DecompressionStream==='undefined') throw new Error('הדפדפן אינו תומך בפתיחת xlsx');
+  const ds=new DecompressionStream('deflate-raw');
+  const buf=await new Response(new Response(u8).body.pipeThrough(ds)).arrayBuffer();
+  return new Uint8Array(buf);
+}
+async function unzip(ab){
+  const dv=new DataView(ab), u8=new Uint8Array(ab);
+  let eocd=-1;
+  for(let i=u8.length-22;i>=0;i--){ if(dv.getUint32(i,true)===0x06054b50){ eocd=i; break; } }
+  if(eocd<0) throw new Error('קובץ xlsx לא תקין');
+  const count=dv.getUint16(eocd+10,true); let off=dv.getUint32(eocd+16,true);
+  const out={};
+  for(let e=0;e<count;e++){
+    if(dv.getUint32(off,true)!==0x02014b50) break;
+    const method=dv.getUint16(off+10,true);
+    const compSize=dv.getUint32(off+20,true);
+    const nameLen=dv.getUint16(off+28,true), extraLen=dv.getUint16(off+30,true), commentLen=dv.getUint16(off+32,true);
+    const lhOff=dv.getUint32(off+42,true);
+    const name=new TextDecoder().decode(u8.subarray(off+46,off+46+nameLen));
+    const lhNameLen=dv.getUint16(lhOff+26,true), lhExtraLen=dv.getUint16(lhOff+28,true);
+    const dataStart=lhOff+30+lhNameLen+lhExtraLen;
+    const comp=u8.subarray(dataStart,dataStart+compSize);
+    if(/sharedStrings\.xml$|worksheets\/sheet1\.xml$/.test(name)){
+      out[name] = method===0 ? comp : await inflateRaw(comp);
+    }
+    off+=46+nameLen+extraLen+commentLen;
+  }
+  return out;
+}
+async function readXLSX(ab){
+  const files=await unzip(ab); const dec=new TextDecoder();
+  const shared=[];
+  if(files['xl/sharedStrings.xml']){
+    const doc=new DOMParser().parseFromString(dec.decode(files['xl/sharedStrings.xml']),'application/xml');
+    doc.querySelectorAll('si').forEach(si=>{ let s=''; si.querySelectorAll('t').forEach(t=>s+=t.textContent); shared.push(s); });
+  }
+  const sheet=files['xl/worksheets/sheet1.xml'];
+  if(!sheet) throw new Error('לא נמצא גיליון');
+  const doc=new DOMParser().parseFromString(dec.decode(sheet),'application/xml');
+  const rows=[];
+  doc.querySelectorAll('row').forEach(r=>{
+    const cells=[];
+    r.querySelectorAll('c').forEach(c=>{
+      const col=colIdx(c.getAttribute('r')||''); const t=c.getAttribute('t'); let val='';
+      if(t==='s'){ const v=c.querySelector('v'); val=v?(shared[parseInt(v.textContent)]||''):''; }
+      else if(t==='inlineStr'){ const is=c.querySelector('is'); val=is?is.textContent:''; }
+      else { const v=c.querySelector('v'); val=v?v.textContent:''; }
+      cells[col]=val;
+    });
+    for(let i=0;i<cells.length;i++) if(cells[i]==null) cells[i]='';
+    rows.push(cells);
+  });
+  return rows.filter(r=>r.some(x=>String(x).trim()!==''));
+}
+
+/* --- קורא PDF (pdf.js נטען לפי דרישה; דורש אינטרנט) --- */
+async function loadPdfJs(){
+  if(window.pdfjsLib) return window.pdfjsLib;
+  const v='4.7.76', base=`https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${v}/`;
+  const mod=await import(base+'pdf.min.mjs');
+  mod.GlobalWorkerOptions.workerSrc=base+'pdf.worker.min.mjs';
+  window.pdfjsLib=mod; return mod;
+}
+async function readPDF(ab){
+  const pdfjs=await loadPdfJs();
+  const doc=await pdfjs.getDocument({data:ab}).promise;
+  const items=[];
+  for(let p=1;p<=doc.numPages;p++){
+    const page=await doc.getPage(p); const c=await page.getTextContent(); const base=p*1e6;
+    c.items.forEach(it=>{ const s=(it.str||'').trim(); if(s==='')return; items.push({x:it.transform[4], y:base-it.transform[5], s}); });
+  }
+  if(!items.length) throw new Error('לא נמצא טקסט (ייתכן PDF סרוק/תמונה)');
+  // אשכול עמודות לפי x
+  const xs=items.map(i=>i.x).sort((a,b)=>a-b); const cols=[];
+  xs.forEach(x=>{ if(!cols.length || x-cols[cols.length-1]>18) cols.push(x); });
+  // קיבוץ לשורות לפי y
+  const byY={}; items.forEach(it=>{ const k=Math.round(it.y/4); (byY[k]=byY[k]||[]).push(it); });
+  const rows=Object.keys(byY).map(Number).sort((a,b)=>a-b).map(k=>{
+    const cells=new Array(cols.length).fill('');
+    byY[k].forEach(it=>{ let ci=0,best=1e9; cols.forEach((cx,i)=>{const d=Math.abs(cx-it.x); if(d<best){best=d;ci=i;}}); cells[ci]=(cells[ci]?cells[ci]+' ':'')+it.s; });
+    return cells;
+  });
+  return rows.filter(r=>r.some(c=>c.trim()!==''));
+}
+
+/* --- מיפוי עמודות ותצוגה מקדימה --- */
+function gridReady(grid){
+  if(!grid || !grid.length){ importErr('לא זוהו נתונים בקובץ/הדבקה.'); return; }
+  // יישור למספר עמודות אחיד
+  const maxc=Math.max(...grid.map(r=>r.length));
+  IMPORT_GRID=grid.map(r=>{ const c=r.slice(); while(c.length<maxc)c.push(''); return c; });
+  window._mapRoles=null; // מיפוי טרי לקובץ חדש
+  importErr('');
+  $('mapArea').classList.remove('hidden');
+  // ניחוש כותרת: אם השורה הראשונה מכילה מילים ולא מספרים
+  const first=IMPORT_GRID[0]||[];
+  const looksHeader = first.some(c=>/[א-תA-Za-z]/.test(c)) && !first.some(c=>parseDateCell(c));
+  $('hasHeader').checked = looksHeader;
+  renderMapPreview();
+}
+function guessRole(text){
+  const s=String(text||'');
+  if(/תארי|מועד|date|day/i.test(s)) return 'date';
+  if(/יתר|balance|יתרת/i.test(s)) return 'balance';
+  if(/קרן|principal|keren/i.test(s)) return 'principal';
+  if(/ריבי|interest|ribit/i.test(s)) return 'interest';
+  if(/תשלו|החזר|payment|תמורה|סה.?כ/i.test(s)) return 'payment';
+  return 'ignore';
+}
+function renderMapPreview(){
+  const grid=IMPORT_GRID; if(!grid) return;
+  const header = $('hasHeader').checked ? grid[0] : null;
+  const ncol=grid[0].length;
+  // ניחוש תפקידים: לפי כותרת אם יש, אחרת לפי תוכן העמודה
+  const prevRoles = window._mapRoles && window._mapRoles.length===ncol ? window._mapRoles : null;
+  const roles=[];
+  for(let c=0;c<ncol;c++){
+    if(prevRoles){ roles.push(prevRoles[c]); continue; }
+    let g='ignore';
+    if(header) g=guessRole(header[c]);
+    if(g==='ignore'){ // ניחוש לפי תוכן
+      const sample=grid.slice(header?1:0, (header?1:0)+6).map(r=>r[c]);
+      if(sample.some(v=>parseDateCell(v))) g='date';
+    }
+    roles.push(g);
+  }
+  // הבטחת ייחוד לתפקידים עיקריים לא חובה — המשתמש יכול לתקן
+  const selRow = roles.map((role,c)=>`<th><select data-col="${c}" onchange="onRoleChange()" style="font-size:12px;padding:4px;border-radius:6px;border:1px solid #cbd5e1;color:var(--ink)">${
+    Object.entries(ROLES).map(([k,v])=>`<option value="${k}" ${role===k?'selected':''}>${v}</option>`).join('')}</select></th>`).join('');
+  const start=header?1:0;
+  const bodyRows=grid.slice(start, start+12).map(r=>`<tr>${r.map(c=>`<td class="num" style="font-size:12px">${esc(c)}</td>`).join('')}</tr>`).join('');
+  $('mapTbl').innerHTML = `<thead><tr>${selRow}</tr>${header?`<tr>${header.map(c=>`<th class="sub" style="font-size:11px;font-weight:400">${esc(c)}</th>`).join('')}</tr>`:''}</thead><tbody>${bodyRows}</tbody>`;
+  window._mapRoles=roles;
+  validateMapping();
+}
+function currentRoles(){ return [...$('mapTbl').querySelectorAll('select')].map(s=>s.value); }
+function onRoleChange(){ window._mapRoles=currentRoles(); validateMapping(); }
+function roleIdx(roles,role){ return roles.indexOf(role); }
+function validateMapping(){
+  const roles=currentRoles();
+  const hasDate=roles.includes('date');
+  const hasAmt = roles.includes('principal')||roles.includes('interest')||roles.includes('payment')||roles.includes('balance');
+  const ok=hasDate&&hasAmt;
+  $('applyImpBtn').disabled=!ok;
+  const built=ok?buildImportRows(roles):[];
+  $('mapSummary').innerHTML = ok
+    ? `יזוהו <b>${built.length}</b> שורות תקינות. ${built.length?`ראשונה: ${fmtDate(built[0].date)} · קרן ${nf0.format(Math.round(built[0].principal))} · ריבית ${nf0.format(Math.round(built[0].interest))}`:''}`
+    : '<span style="color:var(--danger)">יש לסמן לפחות עמודת <b>תאריך</b> ועמודת סכום אחת (קרן / ריבית / תשלום / יתרה).</span>';
+}
+function buildImportRows(roles){
+  const grid=IMPORT_GRID; const start=$('hasHeader').checked?1:0;
+  const di=roleIdx(roles,'date'), pi=roleIdx(roles,'principal'), ii=roleIdx(roles,'interest'),
+        payi=roleIdx(roles,'payment'), bi=roleIdx(roles,'balance');
+  const rows=[];
+  for(let r=start;r<grid.length;r++){
+    const cells=grid[r];
+    const date=parseDateCell(cells[di]); if(!date) continue;
+    let principal = pi>=0?parseNum(cells[pi]):null;
+    const interest = ii>=0?(parseNum(cells[ii])||0):0;
+    const payment = payi>=0?parseNum(cells[payi]):null;
+    const balance = bi>=0?parseNum(cells[bi]):undefined;
+    if(principal==null){ principal = (payment!=null)? (payment-interest) : 0; }
+    rows.push({date, principal:principal||0, interest, balance});
+  }
+  return rows;
+}
+function applyImport(){
+  const roles=currentRoles();
+  const rows=buildImportRows(roles);
+  if(!rows.length){ importErr('לא נבנו שורות תקינות — בדקו את מיפוי העמודות.'); return; }
+  EDIT_OVERRIDE=rows;
+  // השלמת "קרן מקורית" אם ריקה
+  const pf=$('f_principal');
+  if(pf && (!pf.value || num(pf.value)===0)){
+    const hasBal=rows[0].balance!=null && !isNaN(rows[0].balance);
+    pf.value = Math.round(hasBal ? (rows[0].balance + rows[0].principal) : rows.reduce((s,x)=>s+x.principal,0));
+  }
+  closeModal('importModal');
+  refreshOvStatus(); updatePrev();
+  alert(`נטענו ${rows.length} שורות לוח סילוקין. לחצו "שמירה" כדי לשמור את ההלוואה.`);
+}
+
+/* --- פענוח מספרים ותאריכים מגמיש --- */
+function parseNum(v){
+  if(v==null||v==='')return null;
+  let s=String(v).replace(/[^\d.,\-]/g,'');
+  if(s==='')return null;
+  if(s.includes(',')&&s.includes('.')) s=s.replace(/,/g,'');       // 1,234.56
+  else if(s.includes(',')&&!s.includes('.')) s=s.replace(/,/g,''); // 1,234 → אלפים
+  const n=parseFloat(s); return isFinite(n)?n:null;
+}
+function parseDateCell(v){
+  if(v==null)return null; const s=String(v).trim(); if(s==='')return null;
+  if(/^\d+(\.\d+)?$/.test(s)){ const n=parseFloat(s); if(n>20000&&n<80000){ const d=new Date(Date.UTC(1899,11,30)); d.setUTCDate(d.getUTCDate()+Math.round(n)); return d.toISOString().slice(0,10); } return null; }
+  let m=s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2,4})$/);
+  if(m){ let d=+m[1],mo=+m[2],y=+m[3]; if(y<100)y+=2000; if(mo>12&&d<=12){const t=d;d=mo;mo=t;} return `${y}-${String(mo).padStart(2,'0')}-${String(d).padStart(2,'0')}`; }
+  m=s.match(/^(\d{4})[\/.\-](\d{1,2})[\/.\-](\d{1,2})$/);
+  if(m) return `${m[1]}-${String(m[2]).padStart(2,'0')}-${String(m[3]).padStart(2,'0')}`;
+  return null;
 }
 
 // סגירת מודל בלחיצה על הרקע
