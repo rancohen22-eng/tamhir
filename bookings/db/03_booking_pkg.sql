@@ -53,8 +53,11 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
   -- אימות / סיסמאות
   --------------------------------------------------------------------------------
   FUNCTION hash_password (p_salt IN VARCHAR2, p_plain IN VARCHAR2) RETURN VARCHAR2 IS
+    -- STANDARD_HASH הוא אופרטור SQL — חייב להיקרא מתוך SELECT (לא ישירות ב-PL/SQL)
+    l_hash VARCHAR2(100);
   BEGIN
-    RETURN LOWER(RAWTOHEX(STANDARD_HASH(p_salt || p_plain, 'SHA256')));
+    SELECT LOWER(RAWTOHEX(STANDARD_HASH(p_salt || p_plain, 'SHA256'))) INTO l_hash FROM dual;
+    RETURN l_hash;
   END hash_password;
 
   PROCEDURE set_password (p_username IN VARCHAR2, p_plain IN VARCHAR2) IS
