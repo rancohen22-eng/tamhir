@@ -216,11 +216,11 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
         END LOOP;
       APEX_JSON.close_array;
       APEX_JSON.open_array('log');
-        FOR lg IN (SELECT l.from_status fs,l.to_status ts,u.full_name nm,TO_CHAR(l.action_at,'YYYY-MM-DD HH24:MI') at,l.note nt
+        FOR lg IN (SELECT l.from_status fs,l.to_status ts,u.full_name nm,TO_CHAR(l.action_at,'YYYY-MM-DD HH24:MI') atx,l.note nt
                    FROM booking_status_log l JOIN app_users u ON u.user_id=l.action_by
                    WHERE l.booking_id=p_id ORDER BY l.action_at DESC) LOOP
           APEX_JSON.open_object; APEX_JSON.write('from',lg.fs); APEX_JSON.write('to',lg.ts);
-          APEX_JSON.write('by',lg.nm); APEX_JSON.write('at',lg.at); APEX_JSON.write('note',lg.nt); APEX_JSON.close_object;
+          APEX_JSON.write('by',lg.nm); APEX_JSON.write('at',lg.atx); APEX_JSON.write('note',lg.nt); APEX_JSON.close_object;
         END LOOP;
       APEX_JSON.close_array;
     APEX_JSON.close_object;
@@ -287,10 +287,10 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
   BEGIN
     APEX_JSON.initialize_clob_output;
     APEX_JSON.open_object; APEX_JSON.write('ok', TRUE); APEX_JSON.open_array('notifications');
-    FOR n IN (SELECT notif_id,booking_id,message,is_read,TO_CHAR(created_at,'YYYY-MM-DD HH24:MI') at
+    FOR n IN (SELECT notif_id,booking_id,message,is_read,TO_CHAR(created_at,'YYYY-MM-DD HH24:MI') atx
               FROM notifications WHERE user_id = l_uid ORDER BY created_at DESC) LOOP
       APEX_JSON.open_object; APEX_JSON.write('id',n.notif_id); APEX_JSON.write('booking_id',n.booking_id);
-      APEX_JSON.write('message',n.message); APEX_JSON.write('is_read',n.is_read); APEX_JSON.write('at',n.at); APEX_JSON.close_object;
+      APEX_JSON.write('message',n.message); APEX_JSON.write('is_read',n.is_read); APEX_JSON.write('at',n.atx); APEX_JSON.close_object;
     END LOOP;
     APEX_JSON.close_array; APEX_JSON.close_object;
     RETURN APEX_JSON.get_clob_output;
