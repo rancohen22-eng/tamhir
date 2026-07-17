@@ -301,6 +301,9 @@ END api_pkg;
 
 --------------------------------------------------------------------------------
 -- הגדרת מודול ה-ORDS (REST)
+-- הערה: ORDS מתיר handler מסוג PL/SQL רק ל-POST/PUT/DELETE (לא GET).
+--       לכן כל קריאות הנתונים הן POST (פרמטרים ב-form body), ping=query, files=media.
+--       שליחת form-urlencoded מהדפדפן נחשבת "simple request" → אין preflight/OPTIONS.
 --------------------------------------------------------------------------------
 BEGIN
   BEGIN ORDS.DELETE_MODULE(p_module_name => 'arkia.api'); EXCEPTION WHEN OTHERS THEN NULL; END;
@@ -311,87 +314,71 @@ BEGIN
     p_status      => 'PUBLISHED',
     p_comments    => 'Arkia bookings REST API');
 
-  -- ping (בדיקת חיים)
+  -- ping (GET, query — בדיקת חיים בדפדפן)
   ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'ping');
   ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'ping', p_method=>'GET',
-    p_source_type=>ORDS.source_type_plsql,
-    p_source=>q'[BEGIN api_pkg.emit(JSON_OBJECT('ok' VALUE 'true' FORMAT JSON, 'service' VALUE 'arkia-api' RETURNING CLOB)); END;]');
+    p_source_type=>ORDS.source_type_query,
+    p_source=>q'[SELECT 'ok' AS status, 'arkia-api' AS service FROM dual]');
 
-  -- login
+  -- login (POST)
   ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'login');
   ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'login', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
     p_source=>q'[BEGIN api_pkg.emit(api_pkg.login(:username, :password)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
-  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'login', p_method=>'OPTIONS',
-    p_source_type=>ORDS.source_type_plsql, p_source=>q'[BEGIN api_pkg.emit_preflight; END;]');
 
-  -- bootstrap
+  -- bootstrap (POST)
   ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'bootstrap');
-  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'bootstrap', p_method=>'GET',
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'bootstrap', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
     p_source=>q'[BEGIN api_pkg.emit(api_pkg.bootstrap(:token)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
 
-  -- bookings (list + create)
+  -- bookings (POST = list)
   ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'bookings');
-  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'bookings', p_method=>'GET',
-    p_source_type=>ORDS.source_type_plsql,
-    p_source=>q'[BEGIN api_pkg.emit(api_pkg.list_bookings(:token)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
   ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'bookings', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
-    p_source=>q'[BEGIN api_pkg.emit(api_pkg.create_booking(:token, :departure, :price, :currency, :agent_id, :notes)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
-  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'bookings', p_method=>'OPTIONS',
-    p_source_type=>ORDS.source_type_plsql, p_source=>q'[BEGIN api_pkg.emit_preflight; END;]');
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.list_bookings(:token)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
 
-  -- bookings/:id (detail)
-  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'bookings/:id');
-  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'bookings/:id', p_method=>'GET',
+  -- bookings/create (POST)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'bookings/create');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'bookings/create', p_method=>'POST',
+    p_source_type=>ORDS.source_type_plsql,
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.create_booking(:token, :departure, :price, :currency, :agent_id, :notes)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
+
+  -- bookings/get (POST = detail)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'bookings/get');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'bookings/get', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
     p_source=>q'[BEGIN api_pkg.emit(api_pkg.get_booking(:token, :id)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
 
-  -- bookings/:id/action
-  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'bookings/:id/action');
-  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'bookings/:id/action', p_method=>'POST',
+  -- bookings/action (POST = workflow)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'bookings/action');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'bookings/action', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
     p_source=>q'[BEGIN api_pkg.emit(api_pkg.do_action(:token, :id, :action, :price, :currency, :trip, :notes, :pnr, :ref, :tdate, :reason)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
-  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'bookings/:id/action', p_method=>'OPTIONS',
-    p_source_type=>ORDS.source_type_plsql, p_source=>q'[BEGIN api_pkg.emit_preflight; END;]');
 
-  -- notifications
+  -- notifications (POST = list)
   ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'notifications');
-  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'notifications', p_method=>'GET',
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'notifications', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
     p_source=>q'[BEGIN api_pkg.emit(api_pkg.notifications(:token)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
 
+  -- notifications/read (POST)
   ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'notifications/read');
   ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'notifications/read', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
     p_source=>q'[BEGIN api_pkg.emit(api_pkg.mark_read(:token)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
-  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'notifications/read', p_method=>'OPTIONS',
-    p_source_type=>ORDS.source_type_plsql, p_source=>q'[BEGIN api_pkg.emit_preflight; END;]');
 
-  -- files (upload)
-  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'files');
-  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'files', p_method=>'POST',
+  -- files/upload (POST)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'files/upload');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'files/upload', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
     p_source=>q'[BEGIN api_pkg.emit(api_pkg.add_file(:token, :booking_id, :kind, :filename, :mime, :data)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
-  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'files', p_method=>'OPTIONS',
-    p_source_type=>ORDS.source_type_plsql, p_source=>q'[BEGIN api_pkg.emit_preflight; END;]');
 
-  -- files/:id (download)
+  -- files/:id (GET, media — הורדה/תצוגה של קובץ)
   ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'files/:id');
   ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'files/:id', p_method=>'GET',
-    p_source_type=>ORDS.source_type_plsql,
-    p_source=>q'[DECLARE l_blob BLOB; l_mime VARCHAR2(200); l_name VARCHAR2(400);
-BEGIN
-  api_pkg.get_file(:id, l_blob, l_mime, l_name);
-  owa_util.mime_header(l_mime, FALSE);
-  htp.p('Access-Control-Allow-Origin: *');
-  htp.p('Content-Disposition: inline; filename="'||l_name||'"');
-  owa_util.http_header_close;
-  wpg_docload.download_file(l_blob);
-EXCEPTION WHEN OTHERS THEN
-  owa_util.mime_header('application/json', TRUE); htp.p(api_pkg.err(SQLERRM));
-END;]');
+    p_source_type=>ORDS.source_type_media,
+    p_source=>q'[SELECT NVL(mime_type,'application/octet-stream') AS content_type, file_blob FROM booking_files WHERE file_id = :id]');
 
   COMMIT;
 END;
