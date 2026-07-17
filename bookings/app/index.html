@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>תיעוד הזמנות טיסות · ארקיע</title>
+<style>
+  :root{
+    --bg:#f2f5f9; --card:#fff; --ink:#0e1c2e; --muted:#5b6b7f;
+    --brand:#123a86; --brand2:#1e63b8; --accent:#0e7a4e; --line:#e2e8f0;
+    --danger:#b3261e; --warn:#b26b00; --chip:#e8eff7;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:-apple-system,"Segoe UI",Roboto,"Heebo",Arial,sans-serif;font-size:15px;line-height:1.45}
+  .hidden{display:none!important}
+  button{font-family:inherit}
+  #lock{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,var(--brand),var(--brand2))}
+  #lock .panel{width:100%;max-width:380px;background:var(--card);border-radius:16px;padding:26px 22px;box-shadow:0 10px 30px rgba(0,0,0,.25);text-align:center}
+  #lock .wm{font-size:30px;font-weight:800;color:var(--brand);letter-spacing:1px;margin-bottom:6px}
+  #lock h1{margin:6px 0 2px;font-size:18px;color:var(--brand)}
+  #lock p{margin:0 0 16px;color:var(--muted);font-size:13px}
+  .fld{width:100%;padding:11px 13px;font-size:15px;border:1px solid var(--line);border-radius:10px;margin:6px 0;background:#fff;color:var(--ink)}
+  .fld:focus{outline:2px solid var(--brand2);border-color:transparent}
+  #unlockBtn{width:100%;margin-top:10px;padding:12px;font-size:16px;font-weight:700;color:#fff;background:var(--brand);border:0;border-radius:10px;cursor:pointer}
+  #lockErr{color:var(--danger);font-size:13px;min-height:18px;margin-top:8px}
+  .demo{margin-top:14px;font-size:12px;color:var(--muted);text-align:start;background:var(--chip);border-radius:10px;padding:10px 12px}
+  .demo b{color:var(--brand)} .demo code{background:#fff;padding:1px 5px;border-radius:5px}
+  header.app{position:sticky;top:0;z-index:20;background:linear-gradient(160deg,var(--brand),var(--brand2));color:#fff;padding:10px 14px;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+  header.app .row{display:flex;align-items:center;gap:10px}
+  .logobadge{background:#fff;border-radius:8px;padding:4px 8px;line-height:0;flex:0 0 auto}
+  .logobadge img{height:22px;display:block}
+  .logotext{font-weight:800;color:var(--brand);font-size:15px;padding:2px 4px}
+  header.app h1{margin:0;font-size:15px;font-weight:700;white-space:nowrap}
+  .spacer{flex:1}
+  .hbtn{color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.4);font-size:13px;font-weight:600;padding:6px 10px;border-radius:8px;cursor:pointer;white-space:nowrap}
+  .hbtn:hover{background:rgba(255,255,255,.28)}
+  .bell{position:relative}
+  .bell .count{position:absolute;top:-6px;inset-inline-end:-6px;background:var(--danger);color:#fff;font-size:11px;font-weight:700;min-width:17px;height:17px;border-radius:9px;padding:0 4px;display:flex;align-items:center;justify-content:center}
+  .whoami{font-size:12px;opacity:.9;white-space:nowrap}
+  nav.tabs{display:flex;gap:4px;overflow-x:auto;margin-top:8px}
+  nav.tabs button{flex:0 0 auto;background:rgba(255,255,255,.14);color:#fff;border:0;padding:7px 12px;border-radius:8px 8px 0 0;font-size:13.5px;cursor:pointer;white-space:nowrap}
+  nav.tabs button.sel{background:var(--bg);color:var(--brand);font-weight:700}
+  main{max-width:1080px;margin:0 auto;padding:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(16,28,46,.05)}
+  .card h2{margin:0 0 10px;font-size:16px;color:var(--brand)}
+  .card h3{margin:14px 0 8px;font-size:14px;color:var(--brand)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .kpi{background:var(--chip);border-radius:10px;padding:12px}
+  .kpi .n{font-size:16px;font-weight:800;color:var(--brand)}
+  .kpi .l{font-size:12px;color:var(--muted)}
+  label.f{display:block;font-size:12.5px;color:var(--muted);margin:8px 0 2px;font-weight:600}
+  .btn{background:var(--brand);color:#fff;border:0;padding:9px 15px;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.ghost{background:#fff;color:var(--brand);border:1px solid var(--brand)}
+  .btn.ok{background:var(--accent)} .btn.warn{background:var(--warn)} .btn.danger{background:var(--danger)}
+  .btn.sm{padding:6px 10px;font-size:13px}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{padding:8px 9px;text-align:start;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{color:var(--muted);font-weight:700;font-size:12px;background:#f7fafc}
+  tbody tr{cursor:pointer} tbody tr:hover{background:#f7fafc}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+  .badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:700}
+  .st-NEW{background:#eef2f7;color:#425064}.st-AWAITING_QUOTE{background:#fff4e0;color:#8a5a00}
+  .st-QUOTE_RECEIVED{background:#e6f0ff;color:#1e4fa0}.st-APPROVED{background:#e4f5ec;color:#0e7a4e}
+  .st-TICKETED{background:#dff3e7;color:#0a5e3c}.st-CANCEL_REQUESTED{background:#fde8e6;color:#9a2b23}
+  .st-REJECTED{background:#f6e0de;color:#8a231c}.st-CANCELLED{background:#eceff3;color:#5b6b7f}
+  .timeline{list-style:none;margin:0;padding:0}
+  .timeline li{position:relative;padding:0 22px 14px;border-inline-start:2px solid var(--line);margin-inline-start:6px}
+  .timeline li:last-child{border-color:transparent}
+  .timeline .dot{position:absolute;inset-inline-start:-7px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--brand2);border:2px solid #fff;box-shadow:0 0 0 2px var(--brand2)}
+  .timeline .tl-h{font-weight:700;font-size:13.5px}.timeline .tl-m{font-size:12px;color:var(--muted)}.timeline .tl-note{font-size:12.5px;margin-top:2px}
+  .filerow{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px}
+  .cobrand{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--chip);border-radius:10px;margin-bottom:10px}
+  .cobrand img{height:26px}.cobrand .x{color:var(--muted)}
+  .notif{padding:10px;border-bottom:1px solid var(--line);font-size:13.5px;display:flex;gap:8px;align-items:flex-start;cursor:pointer}
+  .notif.unread{background:#f0f6ff}.notif .t{font-size:11px;color:var(--muted)}
+  .muted{color:var(--muted)}
+  .rowflex{display:flex;gap:14px;flex-wrap:wrap}.rowflex>div{flex:1;min-width:170px}
+  .pill{display:inline-block;background:var(--chip);color:var(--brand);border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600}
+  footer{max-width:1080px;margin:0 auto;padding:8px 14px 26px;font-size:11.5px;color:var(--muted)}
+  #spin{position:fixed;inset:0;background:rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;z-index:50}
+  #spin div{width:34px;height:34px;border:4px solid var(--chip);border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<div id="lock">
+  <div class="panel">
+    <img class="wm" src="../assets/arkia-logo.svg" alt="Arkia" style="width:150px;max-width:60%;height:auto;display:block;margin:0 auto 8px" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'wm',textContent:'ARKIA'}))">
+    <h1 id="lk_title">תיעוד הזמנות טיסות</h1>
+    <p>מערכת פנימית · ארקיע</p>
+    <input id="lk_user" class="fld" placeholder="שם משתמש" autocomplete="username" dir="ltr">
+    <input id="lk_pw" class="fld" type="password" placeholder="סיסמה" autocomplete="current-password" dir="ltr">
+    <button id="unlockBtn">כניסה</button>
+    <div id="lockErr"></div>
+    <div class="demo"><b>דמו</b> (סיסמה <code>Arkia2026!</code>): admin · initiator_acmi · approver_acmi · finance · toustous</div>
+  </div>
+</div>
+
+<div id="appwrap" class="hidden">
+  <header class="app">
+    <div class="row">
+      <span class="logobadge"><img src="../assets/arkia-logo.svg" alt="Arkia" onerror="this.parentNode.className='logotext';this.replaceWith('ARKIA')"></span>
+      <h1 id="app_title">תיעוד הזמנות טיסות</h1>
+      <span class="spacer"></span>
+      <button class="hbtn" id="langBtn"></button>
+      <button class="hbtn bell" id="bellBtn">🔔<span class="count hidden" id="bellCount">0</span></button>
+      <span class="whoami" id="whoami"></span>
+      <button class="hbtn" id="logoutBtn"></button>
+    </div>
+    <nav class="tabs" id="tabs"></nav>
+  </header>
+  <main id="app"></main>
+  <footer id="foot"></footer>
+</div>
+<div id="spin" class="hidden"><div></div></div>
+
+<script>
+"use strict";
+/* ============================================================================
+   מערכת תיעוד הזמנות טיסות (ארקיע) — חזית מחוברת ל-REST (ORDS) על Oracle.
+   רב-משתמשי אמיתי. ה-API: /ords/arkia/api/  (ראו bookings/api/install_api.sql)
+   ========================================================================== */
+
+const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
+
+async function api(path, params){
+  // POST form-urlencoded = "simple request" → ללא CORS preflight
+  const r = await fetch(API + path, { method:'POST', body:new URLSearchParams(params||{}) });
+  const txt = await r.text();
+  try { return JSON.parse(txt); } catch(e){ return {ok:false, error:'bad_response: '+txt.slice(0,200)}; }
+}
+function spin(on){ document.getElementById('spin').classList.toggle('hidden', !on); }
+
+/* ── מצב ── */
+let SES = null;     // {token,user,roles,agent_id}
+let BOOT = null;    // {departments,agents,currencies,statuses}
+let VIEW = { tab:'bookings', lang:'he', bookingId:null };
+let STMAP = {};     // status_code -> {he,en,terminal}
+let UNREAD = 0;
+
+const T = {
+  he:{title:"תיעוד הזמנות טיסות",logout:"יציאה",bookings:"הזמנות",newB:"הזמנה חדשה",notifications:"התראות",
+    dept:"מחלקה",status:"סטטוס",initiator:"מזמין",agent:"סוכן",approver:"מאשר",openDate:"תאריך פתיחה",
+    departure:"תאריך יציאה",ticketingDate:"תאריך כרטוס",price:"מחיר",currency:"מטבע",pnr:"PNR",uref:"מזהה חד-ערכי",
+    none:"—",back:"חזרה",details:"פירוט הזמנה",timeline:"מעקב סטטוסים",files:"מסמכים",who:"מבצע",reason:"סיבה",
+    tripDetails:"פרטי נסיעה",quoteNotes:"הערות",sendToAgent:"שלח לסוכן",submitQuote:"הגש הצעת מחיר",
+    approve:"אשר",reject:"דחה",ticket:"כרטס",requestCancel:"בקש ביטול",confirmCancel:"אשר ביטול",
+    uploadScreenshot:"צילום ממערכת ההזמנות",uploadTicket:"מסמך/תמונת כרטוס",noBookings:"אין הזמנות להצגה",
+    markRead:"סמן הכל כנקרא",noNotif:"אין התראות",estPrice:"מחיר משוער",chooseAgent:"בחר סוכן",required:"שדה חובה",
+    download:"הורדה",view:"צפייה",cobrandNote:"בשיתוף",search:"חיפוש...",required2:"נא למלא שדות חובה"},
+  en:{title:"Flight Booking Documentation",logout:"Logout",bookings:"Bookings",newB:"New Booking",notifications:"Notifications",
+    dept:"Department",status:"Status",initiator:"Initiator",agent:"Agent",approver:"Approver",openDate:"Open Date",
+    departure:"Departure",ticketingDate:"Ticketing Date",price:"Price",currency:"Currency",pnr:"PNR",uref:"Unique Ref",
+    none:"—",back:"Back",details:"Booking Details",timeline:"Status Timeline",files:"Documents",who:"By",reason:"Reason",
+    tripDetails:"Trip Details",quoteNotes:"Notes",sendToAgent:"Send to Agent",submitQuote:"Submit Quote",
+    approve:"Approve",reject:"Reject",ticket:"Ticket",requestCancel:"Request Cancel",confirmCancel:"Confirm Cancel",
+    uploadScreenshot:"Booking-system screenshot",uploadTicket:"Ticket document/image",noBookings:"No bookings to show",
+    markRead:"Mark all read",noNotif:"No notifications",estPrice:"Estimated price",chooseAgent:"Choose agent",required:"Required",
+    download:"Download",view:"View",cobrandNote:"With",search:"Search...",required2:"Please fill required fields"}
+};
+function t(k){ return (T[VIEW.lang]||T.he)[k]||k; }
+function stLabel(code){ const s=STMAP[code]; return s?(VIEW.lang==='en'?s.en:s.he):code; }
+function stTerminal(code){ const s=STMAP[code]; return s? s.terminal==='Y':false; }
+function hasRole(r){ return SES && SES.roles && SES.roles.indexOf(r)>=0; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function curSym(code){ const c=(BOOT.currencies||[]).find(x=>x.code===code); return c?c.symbol:''; }
+function deptName(d){ return VIEW.lang==='en'?(d.name_en||d.name_he):d.name_he; }
+
+/* ── התחברות ── */
+async function doLogin(){
+  const u=document.getElementById('lk_user').value.trim();
+  const p=document.getElementById('lk_pw').value;
+  if(!u||!p){ document.getElementById('lockErr').textContent=t('required2'); return; }
+  spin(true);
+  const res=await api('login',{username:u,password:p});
+  spin(false);
+  if(!res.ok){ document.getElementById('lockErr').textContent = res.error==='bad_credentials'?'שם משתמש או סיסמה שגויים / Invalid credentials':('שגיאה: '+res.error); return; }
+  SES={token:res.token,user:res.user,roles:res.roles||[],agent_id:res.agent_id};
+  VIEW.lang=(res.user.pref_lang||'HE').toLowerCase();
+  spin(true);
+  const boot=await api('bootstrap',{token:SES.token});
+  spin(false);
+  if(!boot.ok){ alert('bootstrap error: '+boot.error); return; }
+  BOOT=boot; STMAP={}; (boot.statuses||[]).forEach(s=>STMAP[s.code]={he:s.he,en:s.en,terminal:s.terminal});
+  VIEW.tab = hasRole('AGENT')?'bookings':'bookings';
+  document.getElementById('lock').classList.add('hidden');
+  document.getElementById('appwrap').classList.remove('hidden');
+  applyLang(); await refreshUnread(); render();
+}
+function logout(){ SES=null; document.getElementById('appwrap').classList.add('hidden');
+  document.getElementById('lock').classList.remove('hidden');
+  document.getElementById('lk_user').value=''; document.getElementById('lk_pw').value=''; document.getElementById('lockErr').textContent=''; }
+
+/* ── שפה ── */
+function applyLang(){
+  document.documentElement.lang=VIEW.lang==='en'?'en':'he';
+  document.documentElement.dir=VIEW.lang==='en'?'ltr':'rtl';
+  document.getElementById('app_title').textContent=t('title');
+  document.getElementById('langBtn').textContent=VIEW.lang==='en'?'🇮🇱 עברית':'🇺🇸 English';
+  document.getElementById('logoutBtn').textContent=t('logout');
+}
+function toggleLang(){ VIEW.lang=VIEW.lang==='en'?'he':'en'; applyLang(); render(); }
+
+/* ── ניווט ── */
+function tabsFor(){
+  const tabs=[['bookings',t('bookings')]];
+  if(hasRole('INITIATOR')) tabs.push(['new',t('newB')]);
+  return tabs;
+}
+async function refreshUnread(){
+  const r=await api('notifications',{token:SES.token});
+  if(r.ok){ UNREAD=(r.notifications||[]).filter(n=>n.is_read==='N').length; }
+  const bc=document.getElementById('bellCount'); bc.textContent=UNREAD; bc.classList.toggle('hidden',UNREAD===0);
+}
+function render(){
+  document.getElementById('whoami').textContent=SES.user.full_name;
+  const bc=document.getElementById('bellCount'); bc.textContent=UNREAD; bc.classList.toggle('hidden',UNREAD===0);
+  const nav=document.getElementById('tabs'); nav.innerHTML='';
+  tabsFor().forEach(([k,lbl])=>{ const b=document.createElement('button'); b.textContent=lbl;
+    b.className=VIEW.tab===k?'sel':''; b.onclick=()=>{VIEW.tab=k;VIEW.bookingId=null;render();}; nav.appendChild(b); });
+  document.getElementById('foot').textContent=VIEW.lang==='en'?'Internal use · Arkia · live on Oracle':'לשימוש פנימי · ארקיע · מחובר לאורקל';
+  const app=document.getElementById('app');
+  if(VIEW.tab==='notifications') return renderNotifications(app);
+  if(VIEW.bookingId) return renderDetail(app,VIEW.bookingId);
+  if(VIEW.tab==='new') return renderNew(app);
+  return renderBookings(app);
+}
+
+/* ── רשימת הזמנות ── */
+async function renderBookings(app){
+  app.innerHTML=`<div class="card"><h2>${t('bookings')}</h2><div class="muted">…</div></div>`;
+  const r=await api('bookings',{token:SES.token});
+  if(!r.ok) return app.innerHTML=`<div class="card"><h2>${t('bookings')}</h2><div class="muted" style="color:var(--danger)">${esc(r.error)}</div></div>`;
+  const list=r.bookings||[];
+  app.innerHTML=`<div class="card"><h2>${t('bookings')}</h2>
+    <input id="bkSearch" class="fld" placeholder="${t('search')}" oninput="filterBk()">
+    <div class="tablewrap" style="margin-top:10px"><table id="bkTable"><thead><tr>
+      <th>#</th><th>${t('status')}</th><th>${t('dept')}</th><th>${t('initiator')}</th><th>${t('agent')}</th>
+      <th>${t('departure')}</th><th>${t('price')}</th><th>${t('pnr')}</th></tr></thead><tbody>${
+      list.map(b=>`<tr onclick="openBk(${b.id})">
+        <td>${b.seq}</td><td><span class="badge st-${b.status}">${stLabel(b.status)}</span></td>
+        <td>${esc(VIEW.lang==='en'?b.dept_en:b.dept_he)}</td><td>${esc(b.initiator)}</td>
+        <td>${esc(b.agent||t('none'))}</td><td>${b.departure_date||t('none')}</td>
+        <td>${b.price!=null?curSym(b.currency)+Number(b.price).toLocaleString():t('none')}</td>
+        <td>${esc(b.pnr||t('none'))}</td></tr>`).join('')||`<tr><td colspan="8" class="muted">${t('noBookings')}</td></tr>`}
+    </tbody></table></div></div>`;
+}
+function filterBk(){ const q=document.getElementById('bkSearch').value.toLowerCase();
+  document.querySelectorAll('#bkTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
+function openBk(id){ VIEW.bookingId=id; render(); }
+
+/* ── הזמנה חדשה ── */
+function renderNew(app){
+  const dep=BOOT.departments.find(d=>d.id===SES.user.dept_id);
+  const agentOpts=BOOT.agents.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
+  const curOpts=BOOT.currencies.map(c=>`<option value="${c.code}" ${c.is_default==='Y'?'selected':''}>${c.code} ${c.symbol}</option>`).join('');
+  app.innerHTML=`<div class="card"><h2>${t('newB')}</h2>
+    <p class="muted">${t('dept')}: <b>${dep?esc(deptName(dep)):t('none')}</b></p>
+    <div class="rowflex">
+      <div><label class="f">${t('departure')} *</label><input id="n_dep" class="fld" type="date"></div>
+      <div><label class="f">${t('estPrice')}</label><input id="n_price" class="fld" type="number" min="0" placeholder="0"></div>
+      <div><label class="f">${t('currency')}</label><select id="n_cur" class="fld">${curOpts}</select></div>
+    </div>
+    <label class="f">${t('chooseAgent')} *</label><select id="n_agent" class="fld"><option value="">${t('none')}</option>${agentOpts}</select>
+    <label class="f">${t('quoteNotes')}</label><textarea id="n_note" class="fld" rows="2"></textarea>
+    <div class="btnrow"><button class="btn ok" onclick="createBooking()">${t('sendToAgent')}</button></div>
+    <div id="n_err" style="color:var(--danger);margin-top:6px"></div></div>`;
+}
+async function createBooking(){
+  const dep=document.getElementById('n_dep').value, agent=document.getElementById('n_agent').value;
+  if(!dep||!agent){ document.getElementById('n_err').textContent=t('required2'); return; }
+  spin(true);
+  const r=await api('bookings/create',{token:SES.token,departure:dep,
+    price:document.getElementById('n_price').value||'',currency:document.getElementById('n_cur').value,
+    agent_id:agent,notes:document.getElementById('n_note').value||''});
+  spin(false);
+  if(!r.ok){ document.getElementById('n_err').textContent=r.error; return; }
+  VIEW.tab='bookings'; VIEW.bookingId=r.id; render();
+}
+
+/* ── פירוט הזמנה ── */
+async function renderDetail(app,id){
+  app.innerHTML=`<div class="card"><div class="muted">…</div></div>`;
+  const r=await api('bookings/get',{token:SES.token,id:id});
+  if(!r.ok||!r.booking){ VIEW.bookingId=null; return render(); }
+  const b=r.booking, files=r.files||[], log=r.log||[];
+  const ag=BOOT.agents.find(a=>a.id===b.agent_id);
+  const cobrand = b.agent_id?`<div class="cobrand">
+    <img src="../assets/arkia-logo.svg" alt="Arkia" onerror="this.replaceWith('ARKIA')">
+    <span class="x">✕</span>
+    <img src="../assets/toustous-logo.jpeg" alt="${esc(b.agent)}" onerror="this.style.display='none'">
+    <span class="muted" style="font-size:12px">${t('cobrandNote')}: <b>${esc(b.agent)}</b></span></div>`:'';
+  const kpi=(l,v)=>`<div class="kpi"><div class="l">${l}</div><div class="n">${v}</div></div>`;
+  app.innerHTML=`<div class="card">
+    <div class="btnrow" style="margin:0 0 10px"><button class="btn ghost sm" onclick="VIEW.bookingId=null;render()">← ${t('back')}</button></div>
+    ${cobrand}
+    <h2>${t('details')} #${b.seq} <span class="badge st-${b.status}">${stLabel(b.status)}</span></h2>
+    <div class="grid">
+      ${kpi(t('dept'),esc(VIEW.lang==='en'?b.dept_en:b.dept_he))}
+      ${kpi(t('initiator'),esc(b.initiator))}
+      ${kpi(t('agent'),esc(b.agent||t('none')))}
+      ${kpi(t('approver'),esc(b.approver||t('none')))}
+      ${kpi(t('openDate'),b.open_date||t('none'))}
+      ${kpi(t('departure'),b.departure_date||t('none'))}
+      ${kpi(t('ticketingDate'),b.ticketing_date||t('none'))}
+      ${kpi(t('price'),b.price!=null?curSym(b.currency)+Number(b.price).toLocaleString()+' '+b.currency:t('none'))}
+      ${kpi(t('pnr'),esc(b.pnr||t('none')))}
+      ${kpi(t('uref'),esc(b.unique_ref||t('none')))}
+    </div>
+    ${b.trip_details?`<h3>${t('tripDetails')}</h3><div class="muted">${esc(b.trip_details)}</div>`:''}
+    ${b.quote_notes?`<h3>${t('quoteNotes')}</h3><div class="muted">${esc(b.quote_notes)}</div>`:''}
+    ${b.rejection_reason?`<h3>${t('reject')} · ${t('reason')}</h3><div class="muted">${esc(b.rejection_reason)}</div>`:''}
+    ${b.cancel_reason?`<h3>${t('requestCancel')} · ${t('reason')}</h3><div class="muted">${esc(b.cancel_reason)}</div>`:''}
+    <div id="actions">${actionsHtml(b)}</div>
+  </div>
+  <div class="card"><h2>${t('files')}</h2>${
+    files.length?files.map(f=>{const kl=f.kind==='QUOTE_SCREENSHOT'?t('uploadScreenshot'):(f.kind==='FINAL_TICKET'?t('uploadTicket'):'—');
+      const url=API+'files/'+f.id;
+      return `<div class="filerow">📄<div style="flex:1"><b>${kl}</b><br><span class="muted">${esc(f.filename)}</span></div>
+        <a class="btn ghost sm" href="${url}" target="_blank">${t('view')}</a>
+        <a class="btn ghost sm" href="${url}" download="${esc(f.filename)}">${t('download')}</a></div>`;}).join(''):`<div class="muted">${t('none')}</div>`}
+  </div>
+  <div class="card"><h2>${t('timeline')}</h2><ul class="timeline">${
+    log.map(l=>`<li><span class="dot"></span>
+      <div class="tl-h">${l.from?stLabel(l.from)+' → ':''}${stLabel(l.to)}</div>
+      <div class="tl-m">${t('who')}: ${esc(l.by)} · ${l.at}</div>
+      ${l.note?`<div class="tl-note">${esc(l.note)}</div>`:''}</li>`).join('')}</ul></div>`;
+}
+function actionsHtml(b){
+  const isAgent = hasRole('AGENT') && SES.agent_id && b.agent_id===SES.agent_id;
+  const isApprover = hasRole('APPROVER') && (b.approver_id===SES.user.id || SES.user.dept_id===b.dept_id);
+  const isInitiator = b.initiator_id===SES.user.id;
+  let h='';
+  if(b.status==='AWAITING_QUOTE'&&isAgent) h+=`<button class="btn" onclick="quoteForm(${b.id},'${b.currency}')">${t('submitQuote')}</button>`;
+  if(b.status==='QUOTE_RECEIVED'&&isApprover){ h+=`<button class="btn ok" onclick="act(${b.id},'approve')">${t('approve')}</button>`;
+    h+=`<button class="btn danger" onclick="actReason(${b.id},'reject')">${t('reject')}</button>`; }
+  if(b.status==='APPROVED'&&isAgent) h+=`<button class="btn" onclick="ticketForm(${b.id})">${t('ticket')}</button>`;
+  if(b.status==='CANCEL_REQUESTED'&&isAgent) h+=`<button class="btn warn" onclick="act(${b.id},'confirm_cancel')">${t('confirmCancel')}</button>`;
+  if((isInitiator||isApprover)&&!stTerminal(b.status)&&b.status!=='CANCEL_REQUESTED')
+    h+=`<button class="btn ghost" onclick="actReason(${b.id},'request_cancel')">${t('requestCancel')}</button>`;
+  return h?`<div class="btnrow">${h}</div>`:'';
+}
+async function act(id,action,extra){
+  spin(true); const r=await api('bookings/action',Object.assign({token:SES.token,id:id,action:action},extra||{})); spin(false);
+  if(!r.ok){ alert(r.error); return; }
+  await refreshUnread(); render();
+}
+function actReason(id,action){ const r=prompt(t('reason')+':'); if(r===null) return; act(id,action,{reason:r,notes:r}); }
+
+function fileToB64(file){ return new Promise((res,rej)=>{ const rd=new FileReader();
+  rd.onload=()=>res(String(rd.result).split(',')[1]||''); rd.onerror=rej; rd.readAsDataURL(file); }); }
+
+function quoteForm(id,cur){
+  const curOpts=BOOT.currencies.map(c=>`<option value="${c.code}" ${c.code===cur?'selected':''}>${c.code} ${c.symbol}</option>`).join('');
+  document.getElementById('actions').innerHTML=`<h3>${t('submitQuote')}</h3>
+    <div class="rowflex"><div><label class="f">${t('price')} *</label><input id="q_price" class="fld" type="number" min="0"></div>
+      <div><label class="f">${t('currency')}</label><select id="q_cur" class="fld">${curOpts}</select></div></div>
+    <label class="f">${t('tripDetails')}</label><textarea id="q_trip" class="fld" rows="3"></textarea>
+    <label class="f">${t('quoteNotes')}</label><textarea id="q_note" class="fld" rows="2"></textarea>
+    <label class="f">${t('uploadScreenshot')} *</label><input id="q_file" class="fld" type="file" accept="image/*,application/pdf">
+    <div class="btnrow"><button class="btn ok" onclick="submitQuote(${id})">${t('submitQuote')}</button>
+      <button class="btn ghost" onclick="render()">${t('back')}</button></div>
+    <div id="q_err" style="color:var(--danger);font-size:13px;margin-top:6px"></div>`;
+}
+async function submitQuote(id){
+  const price=document.getElementById('q_price').value, fi=document.getElementById('q_file');
+  if(!price||!fi.files.length){ document.getElementById('q_err').textContent=t('required2'); return; }
+  spin(true);
+  const f=fi.files[0], b64=await fileToB64(f);
+  let up=await api('files/upload',{token:SES.token,booking_id:id,kind:'QUOTE_SCREENSHOT',filename:f.name,mime:f.type,data:b64});
+  if(!up.ok){ spin(false); document.getElementById('q_err').textContent=up.error; return; }
+  const r=await api('bookings/action',{token:SES.token,id:id,action:'submit_quote',price:price,
+    currency:document.getElementById('q_cur').value,trip:document.getElementById('q_trip').value||'',
+    notes:document.getElementById('q_note').value||''});
+  spin(false);
+  if(!r.ok){ document.getElementById('q_err').textContent=r.error; return; }
+  await refreshUnread(); render();
+}
+function ticketForm(id){
+  document.getElementById('actions').innerHTML=`<h3>${t('ticket')}</h3>
+    <div class="rowflex"><div><label class="f">${t('pnr')} *</label><input id="tk_pnr" class="fld"></div>
+      <div><label class="f">${t('uref')} *</label><input id="tk_ref" class="fld"></div>
+      <div><label class="f">${t('ticketingDate')}</label><input id="tk_date" class="fld" type="date" value="${new Date().toISOString().slice(0,10)}"></div></div>
+    <label class="f">${t('uploadTicket')} *</label><input id="tk_file" class="fld" type="file" accept="image/*,application/pdf">
+    <div class="btnrow"><button class="btn ok" onclick="submitTicket(${id})">${t('ticket')}</button>
+      <button class="btn ghost" onclick="render()">${t('back')}</button></div>
+    <div id="tk_err" style="color:var(--danger);font-size:13px;margin-top:6px"></div>`;
+}
+async function submitTicket(id){
+  const pnr=document.getElementById('tk_pnr').value.trim(), ref=document.getElementById('tk_ref').value.trim(), fi=document.getElementById('tk_file');
+  if(!pnr||!ref||!fi.files.length){ document.getElementById('tk_err').textContent=t('required2'); return; }
+  spin(true);
+  const f=fi.files[0], b64=await fileToB64(f);
+  let up=await api('files/upload',{token:SES.token,booking_id:id,kind:'FINAL_TICKET',filename:f.name,mime:f.type,data:b64});
+  if(!up.ok){ spin(false); document.getElementById('tk_err').textContent=up.error; return; }
+  const r=await api('bookings/action',{token:SES.token,id:id,action:'ticket',pnr:pnr,ref:ref,tdate:document.getElementById('tk_date').value});
+  spin(false);
+  if(!r.ok){ document.getElementById('tk_err').textContent=r.error; return; }
+  await refreshUnread(); render();
+}
+
+/* ── התראות ── */
+function openBell(){ VIEW.tab='notifications'; VIEW.bookingId=null; render(); }
+async function renderNotifications(app){
+  app.innerHTML=`<div class="card"><h2>${t('notifications')}</h2><div class="muted">…</div></div>`;
+  const r=await api('notifications',{token:SES.token});
+  const list=r.ok?(r.notifications||[]):[];
+  app.innerHTML=`<div class="card"><div style="display:flex;align-items:center;gap:10px">
+    <h2 style="margin:0;flex:1">${t('notifications')}</h2>
+    <button class="btn ghost sm" onclick="markAllRead()">${t('markRead')}</button></div>
+    <div style="margin-top:10px">${list.map(n=>`<div class="notif ${n.is_read==='N'?'unread':''}" onclick="openFromNotif(${n.booking_id||'null'})">
+      <span>🔔</span><div style="flex:1">${esc(n.message)}<div class="t">${n.at}</div></div></div>`).join('')||`<div class="muted">${t('noNotif')}</div>`}</div></div>`;
+}
+async function markAllRead(){ spin(true); await api('notifications/read',{token:SES.token}); await refreshUnread(); spin(false); render(); }
+async function openFromNotif(bid){ await api('notifications/read',{token:SES.token}); await refreshUnread();
+  if(bid){ VIEW.tab='bookings'; VIEW.bookingId=bid; } render(); }
+
+/* ── init ── */
+document.getElementById('unlockBtn').onclick=doLogin;
+document.getElementById('lk_pw').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+document.getElementById('langBtn').onclick=toggleLang;
+document.getElementById('logoutBtn').onclick=logout;
+document.getElementById('bellBtn').onclick=openBell;
+</script>
+</body>
+</html>
