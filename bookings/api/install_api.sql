@@ -70,17 +70,12 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
 
   PROCEDURE emit_preflight IS
   BEGIN
-    owa_util.mime_header('text/plain', FALSE);
-    htp.p('Access-Control-Allow-Origin: *');
-    htp.p('Access-Control-Allow-Methods: GET, POST, OPTIONS');
-    htp.p('Access-Control-Allow-Headers: Content-Type, Authorization');
-    htp.p('Access-Control-Max-Age: 86400');
-    owa_util.http_header_close;
+    owa_util.mime_header('text/plain', TRUE);
   END emit_preflight;
 
   FUNCTION err (p_msg VARCHAR2) RETURN CLOB IS
   BEGIN
-    RETURN JSON_OBJECT('ok' VALUE 'false' FORMAT JSON, 'error' VALUE p_msg RETURNING CLOB);
+    RETURN '{"ok":false,"error":"'||REPLACE(REPLACE(NVL(p_msg,'error'),'\','\\'),'"','\"')||'"}';
   END err;
 
   FUNCTION uid (p_token VARCHAR2) RETURN NUMBER IS
@@ -100,126 +95,142 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
   END has_role;
 
   FUNCTION login (p_username VARCHAR2, p_password VARCHAR2) RETURN CLOB IS
-    l_uid   NUMBER;
-    l_token VARCHAR2(64);
-    l_json  CLOB;
+    l_uid NUMBER; l_token VARCHAR2(64); l_dept NUMBER; l_lang VARCHAR2(2); l_full VARCHAR2(150); l_agent NUMBER;
   BEGIN
-    IF NOT booking_pkg.authenticate(p_username, p_password) THEN
-      RETURN err('bad_credentials');
-    END IF;
-    SELECT user_id INTO l_uid FROM app_users WHERE LOWER(username) = LOWER(p_username);
+    IF NOT booking_pkg.authenticate(p_username, p_password) THEN RETURN err('bad_credentials'); END IF;
+    SELECT user_id, dept_id, pref_lang, full_name INTO l_uid, l_dept, l_lang, l_full
+      FROM app_users WHERE LOWER(username) = LOWER(p_username);
     l_token := RAWTOHEX(SYS_GUID());
-    INSERT INTO api_sessions (token, user_id) VALUES (l_token, l_uid);
-    COMMIT;
-    SELECT JSON_OBJECT(
-             'ok'    VALUE 'true' FORMAT JSON,
-             'token' VALUE l_token,
-             'user'  VALUE JSON_OBJECT('id' VALUE u.user_id, 'username' VALUE u.username,
-                        'full_name' VALUE u.full_name, 'dept_id' VALUE u.dept_id,
-                        'pref_lang' VALUE u.pref_lang),
-             'roles' VALUE (SELECT JSON_ARRAYAGG(role_code RETURNING CLOB) FROM user_roles WHERE user_id = u.user_id),
-             'agent_id' VALUE (SELECT MAX(agent_id) FROM agents WHERE user_id = u.user_id)
-             RETURNING CLOB)
-      INTO l_json FROM app_users u WHERE u.user_id = l_uid;
-    RETURN l_json;
-  EXCEPTION WHEN OTHERS THEN RETURN err(SQLERRM);
+    INSERT INTO api_sessions (token, user_id) VALUES (l_token, l_uid); COMMIT;
+    SELECT MAX(agent_id) INTO l_agent FROM agents WHERE user_id = l_uid;
+    APEX_JSON.initialize_clob_output;
+    APEX_JSON.open_object;
+      APEX_JSON.write('ok', TRUE);
+      APEX_JSON.write('token', l_token);
+      APEX_JSON.open_object('user');
+        APEX_JSON.write('id', l_uid); APEX_JSON.write('username', LOWER(p_username));
+        APEX_JSON.write('full_name', l_full); APEX_JSON.write('dept_id', l_dept); APEX_JSON.write('pref_lang', l_lang);
+      APEX_JSON.close_object;
+      APEX_JSON.open_array('roles');
+        FOR r IN (SELECT role_code FROM user_roles WHERE user_id = l_uid) LOOP APEX_JSON.write(r.role_code); END LOOP;
+      APEX_JSON.close_array;
+      APEX_JSON.write('agent_id', l_agent);
+    APEX_JSON.close_object;
+    RETURN APEX_JSON.get_clob_output;
+  EXCEPTION WHEN OTHERS THEN APEX_JSON.free_output; RETURN err(SQLERRM);
   END login;
 
   FUNCTION bootstrap (p_token VARCHAR2) RETURN CLOB IS
-    l_uid  NUMBER := uid(p_token);
-    l_json CLOB;
+    l_uid NUMBER := uid(p_token);
   BEGIN
-    SELECT JSON_OBJECT(
-      'ok' VALUE 'true' FORMAT JSON,
-      'departments' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('id' VALUE dept_id,'code' VALUE dept_code,
-                             'name_he' VALUE name_he,'name_en' VALUE name_en) RETURNING CLOB)
-                           FROM departments WHERE is_active='Y'),
-      'agents' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('id' VALUE agent_id,'name' VALUE agency_name) RETURNING CLOB)
-                      FROM agents WHERE is_active='Y'),
-      'currencies' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('code' VALUE code,'symbol' VALUE symbol,
-                            'is_default' VALUE is_default) RETURNING CLOB) FROM currencies),
-      'statuses' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('code' VALUE status_code,'he' VALUE label_he,
-                          'en' VALUE label_en,'terminal' VALUE is_terminal) RETURNING CLOB) FROM statuses)
-      RETURNING CLOB)
-    INTO l_json FROM dual;
-    RETURN l_json;
-  EXCEPTION WHEN OTHERS THEN RETURN err(SQLERRM);
+    APEX_JSON.initialize_clob_output;
+    APEX_JSON.open_object; APEX_JSON.write('ok', TRUE);
+      APEX_JSON.open_array('departments');
+        FOR d IN (SELECT dept_id,dept_code,name_he,name_en FROM departments WHERE is_active='Y' ORDER BY dept_id) LOOP
+          APEX_JSON.open_object; APEX_JSON.write('id',d.dept_id); APEX_JSON.write('code',d.dept_code);
+          APEX_JSON.write('name_he',d.name_he); APEX_JSON.write('name_en',d.name_en); APEX_JSON.close_object;
+        END LOOP;
+      APEX_JSON.close_array;
+      APEX_JSON.open_array('agents');
+        FOR a IN (SELECT agent_id,agency_name FROM agents WHERE is_active='Y' ORDER BY agent_id) LOOP
+          APEX_JSON.open_object; APEX_JSON.write('id',a.agent_id); APEX_JSON.write('name',a.agency_name); APEX_JSON.close_object;
+        END LOOP;
+      APEX_JSON.close_array;
+      APEX_JSON.open_array('currencies');
+        FOR c IN (SELECT code,symbol,is_default FROM currencies ORDER BY DECODE(is_default,'Y',0,1),code) LOOP
+          APEX_JSON.open_object; APEX_JSON.write('code',c.code); APEX_JSON.write('symbol',c.symbol);
+          APEX_JSON.write('is_default',c.is_default); APEX_JSON.close_object;
+        END LOOP;
+      APEX_JSON.close_array;
+      APEX_JSON.open_array('statuses');
+        FOR s IN (SELECT status_code,label_he,label_en,is_terminal FROM statuses ORDER BY sort_order) LOOP
+          APEX_JSON.open_object; APEX_JSON.write('code',s.status_code); APEX_JSON.write('he',s.label_he);
+          APEX_JSON.write('en',s.label_en); APEX_JSON.write('terminal',s.is_terminal); APEX_JSON.close_object;
+        END LOOP;
+      APEX_JSON.close_array;
+    APEX_JSON.close_object;
+    RETURN APEX_JSON.get_clob_output;
+  EXCEPTION WHEN OTHERS THEN APEX_JSON.free_output; RETURN err(SQLERRM);
   END bootstrap;
 
   FUNCTION list_bookings (p_token VARCHAR2) RETURN CLOB IS
-    l_uid   NUMBER := uid(p_token);
-    l_all   VARCHAR2(1);
-    l_agent NUMBER;
-    l_dept  NUMBER;
-    l_json  CLOB;
+    l_uid NUMBER := uid(p_token); l_all VARCHAR2(1); l_agent NUMBER; l_dept NUMBER;
   BEGIN
     l_all := CASE WHEN has_role(l_uid,'ADMIN')='Y' OR has_role(l_uid,'FINANCE')='Y' THEN 'Y' ELSE 'N' END;
     SELECT MAX(agent_id) INTO l_agent FROM agents WHERE user_id = l_uid;
     SELECT dept_id INTO l_dept FROM app_users WHERE user_id = l_uid;
-    SELECT JSON_ARRAYAGG(JSON_OBJECT(
-             'id' VALUE b.booking_id, 'seq' VALUE b.booking_id, 'status' VALUE b.status,
-             'dept_id' VALUE b.dept_id, 'dept_he' VALUE d.name_he, 'dept_en' VALUE d.name_en,
-             'initiator' VALUE ini.full_name, 'agent_id' VALUE b.agent_id, 'agent' VALUE ag.agency_name,
-             'departure_date' VALUE TO_CHAR(b.departure_date,'YYYY-MM-DD'),
-             'open_date' VALUE TO_CHAR(b.open_date,'YYYY-MM-DD'),
-             'ticketing_date' VALUE TO_CHAR(b.ticketing_date,'YYYY-MM-DD'),
-             'price' VALUE b.price, 'currency' VALUE b.currency_code, 'pnr' VALUE b.pnr
-             RETURNING CLOB) ORDER BY b.booking_id DESC RETURNING CLOB)
-      INTO l_json
-      FROM bookings b
-      JOIN departments d  ON d.dept_id   = b.dept_id
-      JOIN app_users  ini ON ini.user_id = b.initiator_id
-      LEFT JOIN agents ag ON ag.agent_id = b.agent_id
-     WHERE l_all = 'Y'
-        OR (l_agent IS NOT NULL AND b.agent_id = l_agent)
-        OR (l_agent IS NULL AND b.dept_id = l_dept);
-    RETURN JSON_OBJECT('ok' VALUE 'true' FORMAT JSON,
-                       'bookings' VALUE NVL(l_json,'[]') FORMAT JSON RETURNING CLOB);
-  EXCEPTION WHEN OTHERS THEN RETURN err(SQLERRM);
+    APEX_JSON.initialize_clob_output;
+    APEX_JSON.open_object; APEX_JSON.write('ok', TRUE); APEX_JSON.open_array('bookings');
+    FOR b IN (
+      SELECT b.booking_id, b.status, b.dept_id, d.name_he dhe, d.name_en den, ini.full_name ininame,
+             b.agent_id, ag.agency_name agn, TO_CHAR(b.departure_date,'YYYY-MM-DD') dep,
+             TO_CHAR(b.open_date,'YYYY-MM-DD') opn, TO_CHAR(b.ticketing_date,'YYYY-MM-DD') tkt,
+             b.price, b.currency_code cur, b.pnr
+      FROM bookings b JOIN departments d ON d.dept_id=b.dept_id
+           JOIN app_users ini ON ini.user_id=b.initiator_id
+           LEFT JOIN agents ag ON ag.agent_id=b.agent_id
+      WHERE l_all='Y' OR (l_agent IS NOT NULL AND b.agent_id=l_agent) OR (l_agent IS NULL AND b.dept_id=l_dept)
+      ORDER BY b.booking_id DESC) LOOP
+      APEX_JSON.open_object;
+        APEX_JSON.write('id',b.booking_id); APEX_JSON.write('seq',b.booking_id); APEX_JSON.write('status',b.status);
+        APEX_JSON.write('dept_id',b.dept_id); APEX_JSON.write('dept_he',b.dhe); APEX_JSON.write('dept_en',b.den);
+        APEX_JSON.write('initiator',b.ininame); APEX_JSON.write('agent_id',b.agent_id); APEX_JSON.write('agent',b.agn);
+        APEX_JSON.write('departure_date',b.dep); APEX_JSON.write('open_date',b.opn); APEX_JSON.write('ticketing_date',b.tkt);
+        APEX_JSON.write('price',b.price); APEX_JSON.write('currency',b.cur); APEX_JSON.write('pnr',b.pnr);
+      APEX_JSON.close_object;
+    END LOOP;
+    APEX_JSON.close_array; APEX_JSON.close_object;
+    RETURN APEX_JSON.get_clob_output;
+  EXCEPTION WHEN OTHERS THEN APEX_JSON.free_output; RETURN err(SQLERRM);
   END list_bookings;
 
   FUNCTION get_booking (p_token VARCHAR2, p_id NUMBER) RETURN CLOB IS
-    l_uid  NUMBER := uid(p_token);
-    l_json CLOB;
+    l_uid NUMBER := uid(p_token); r bookings%ROWTYPE;
+    l_dhe VARCHAR2(120); l_den VARCHAR2(120); l_ini VARCHAR2(150); l_agn VARCHAR2(150); l_apr VARCHAR2(150);
   BEGIN
-    SELECT JSON_OBJECT(
-      'ok' VALUE 'true' FORMAT JSON,
-      'booking' VALUE (SELECT JSON_OBJECT(
-          'id' VALUE b.booking_id,'seq' VALUE b.booking_id,'status' VALUE b.status,
-          'dept_id' VALUE b.dept_id,'dept_he' VALUE d.name_he,'dept_en' VALUE d.name_en,
-          'initiator_id' VALUE b.initiator_id,'initiator' VALUE ini.full_name,
-          'agent_id' VALUE b.agent_id,'agent' VALUE ag.agency_name,
-          'approver_id' VALUE b.approver_id,'approver' VALUE apr.full_name,
-          'departure_date' VALUE TO_CHAR(b.departure_date,'YYYY-MM-DD'),
-          'open_date' VALUE TO_CHAR(b.open_date,'YYYY-MM-DD'),
-          'ticketing_date' VALUE TO_CHAR(b.ticketing_date,'YYYY-MM-DD'),
-          'price' VALUE b.price,'currency' VALUE b.currency_code,'pnr' VALUE b.pnr,
-          'unique_ref' VALUE b.unique_booking_ref,'quote_notes' VALUE b.quote_notes,
-          'trip_details' VALUE b.trip_details,'rejection_reason' VALUE b.rejection_reason,
-          'cancel_reason' VALUE b.cancel_reason RETURNING CLOB)
-        FROM bookings b JOIN departments d ON d.dept_id=b.dept_id
-             JOIN app_users ini ON ini.user_id=b.initiator_id
-             LEFT JOIN agents ag ON ag.agent_id=b.agent_id
-             LEFT JOIN app_users apr ON apr.user_id=b.approver_id
-        WHERE b.booking_id=p_id),
-      'files' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('id' VALUE file_id,'kind' VALUE file_kind,
-                       'filename' VALUE filename,'mime' VALUE mime_type) RETURNING CLOB)
-                     FROM booking_files WHERE booking_id=p_id),
-      'log' VALUE (SELECT JSON_ARRAYAGG(JSON_OBJECT('from' VALUE l.from_status,'to' VALUE l.to_status,
-                     'by' VALUE u.full_name,'at' VALUE TO_CHAR(l.action_at,'YYYY-MM-DD HH24:MI'),
-                     'note' VALUE l.note) ORDER BY l.action_at DESC RETURNING CLOB)
+    SELECT * INTO r FROM bookings WHERE booking_id = p_id;
+    SELECT name_he,name_en INTO l_dhe,l_den FROM departments WHERE dept_id=r.dept_id;
+    SELECT full_name INTO l_ini FROM app_users WHERE user_id=r.initiator_id;
+    BEGIN SELECT agency_name INTO l_agn FROM agents WHERE agent_id=r.agent_id; EXCEPTION WHEN NO_DATA_FOUND THEN l_agn:=NULL; END;
+    BEGIN SELECT full_name INTO l_apr FROM app_users WHERE user_id=r.approver_id; EXCEPTION WHEN NO_DATA_FOUND THEN l_apr:=NULL; END;
+    APEX_JSON.initialize_clob_output;
+    APEX_JSON.open_object; APEX_JSON.write('ok', TRUE);
+      APEX_JSON.open_object('booking');
+        APEX_JSON.write('id',r.booking_id); APEX_JSON.write('seq',r.booking_id); APEX_JSON.write('status',r.status);
+        APEX_JSON.write('dept_id',r.dept_id); APEX_JSON.write('dept_he',l_dhe); APEX_JSON.write('dept_en',l_den);
+        APEX_JSON.write('initiator_id',r.initiator_id); APEX_JSON.write('initiator',l_ini);
+        APEX_JSON.write('agent_id',r.agent_id); APEX_JSON.write('agent',l_agn);
+        APEX_JSON.write('approver_id',r.approver_id); APEX_JSON.write('approver',l_apr);
+        APEX_JSON.write('departure_date',TO_CHAR(r.departure_date,'YYYY-MM-DD'));
+        APEX_JSON.write('open_date',TO_CHAR(r.open_date,'YYYY-MM-DD'));
+        APEX_JSON.write('ticketing_date',TO_CHAR(r.ticketing_date,'YYYY-MM-DD'));
+        APEX_JSON.write('price',r.price); APEX_JSON.write('currency',r.currency_code);
+        APEX_JSON.write('pnr',r.pnr); APEX_JSON.write('unique_ref',r.unique_booking_ref);
+        APEX_JSON.write('quote_notes',r.quote_notes); APEX_JSON.write('trip_details',r.trip_details);
+        APEX_JSON.write('rejection_reason',r.rejection_reason); APEX_JSON.write('cancel_reason',r.cancel_reason);
+      APEX_JSON.close_object;
+      APEX_JSON.open_array('files');
+        FOR f IN (SELECT file_id,file_kind,filename,mime_type FROM booking_files WHERE booking_id=p_id ORDER BY file_id) LOOP
+          APEX_JSON.open_object; APEX_JSON.write('id',f.file_id); APEX_JSON.write('kind',f.file_kind);
+          APEX_JSON.write('filename',f.filename); APEX_JSON.write('mime',f.mime_type); APEX_JSON.close_object;
+        END LOOP;
+      APEX_JSON.close_array;
+      APEX_JSON.open_array('log');
+        FOR lg IN (SELECT l.from_status fs,l.to_status ts,u.full_name nm,TO_CHAR(l.action_at,'YYYY-MM-DD HH24:MI') at,l.note nt
                    FROM booking_status_log l JOIN app_users u ON u.user_id=l.action_by
-                   WHERE l.booking_id=p_id)
-      RETURNING CLOB) INTO l_json FROM dual;
-    RETURN l_json;
-  EXCEPTION WHEN OTHERS THEN RETURN err(SQLERRM);
+                   WHERE l.booking_id=p_id ORDER BY l.action_at DESC) LOOP
+          APEX_JSON.open_object; APEX_JSON.write('from',lg.fs); APEX_JSON.write('to',lg.ts);
+          APEX_JSON.write('by',lg.nm); APEX_JSON.write('at',lg.at); APEX_JSON.write('note',lg.nt); APEX_JSON.close_object;
+        END LOOP;
+      APEX_JSON.close_array;
+    APEX_JSON.close_object;
+    RETURN APEX_JSON.get_clob_output;
+  EXCEPTION WHEN OTHERS THEN APEX_JSON.free_output; RETURN err(SQLERRM);
   END get_booking;
 
   FUNCTION create_booking (p_token VARCHAR2, p_departure VARCHAR2, p_price NUMBER,
                            p_currency VARCHAR2, p_agent_id NUMBER, p_notes VARCHAR2) RETURN CLOB IS
-    l_uid  NUMBER := uid(p_token);
-    l_dept NUMBER;
-    l_id   NUMBER;
+    l_uid NUMBER := uid(p_token); l_dept NUMBER; l_id NUMBER;
   BEGIN
     SELECT dept_id INTO l_dept FROM app_users WHERE user_id = l_uid;
     INSERT INTO bookings (dept_id, initiator_id, agent_id, approver_id, status, open_date,
@@ -227,11 +238,10 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
     VALUES (l_dept, l_uid, p_agent_id, booking_pkg.derive_approver(l_dept), 'NEW', TRUNC(SYSDATE),
             TO_DATE(p_departure,'YYYY-MM-DD'), p_price, NVL(p_currency,'USD'), p_notes)
     RETURNING booking_id INTO l_id;
-    INSERT INTO booking_status_log (booking_id, from_status, to_status, action_by)
-    VALUES (l_id, NULL, 'NEW', l_uid);
+    INSERT INTO booking_status_log (booking_id, from_status, to_status, action_by) VALUES (l_id, NULL, 'NEW', l_uid);
     booking_pkg.send_for_quote(l_id, p_agent_id, l_uid);
     COMMIT;
-    RETURN JSON_OBJECT('ok' VALUE 'true' FORMAT JSON, 'id' VALUE l_id RETURNING CLOB);
+    RETURN '{"ok":true,"id":'||l_id||'}';
   EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
   END create_booking;
 
@@ -250,20 +260,19 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
       ELSE RETURN err('unknown_action');
     END CASE;
     COMMIT;
-    RETURN JSON_OBJECT('ok' VALUE 'true' FORMAT JSON RETURNING CLOB);
+    RETURN '{"ok":true}';
   EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
   END do_action;
 
   FUNCTION add_file (p_token VARCHAR2, p_booking_id NUMBER, p_kind VARCHAR2,
                      p_filename VARCHAR2, p_mime VARCHAR2, p_data CLOB) RETURN CLOB IS
-    l_uid  NUMBER := uid(p_token);
-    l_blob BLOB;
+    l_uid NUMBER := uid(p_token); l_blob BLOB;
   BEGIN
     l_blob := APEX_WEB_SERVICE.CLOBBASE642BLOB(p_data);
     INSERT INTO booking_files (booking_id, file_kind, filename, mime_type, file_blob, uploaded_by)
     VALUES (p_booking_id, p_kind, p_filename, p_mime, l_blob, l_uid);
     COMMIT;
-    RETURN JSON_OBJECT('ok' VALUE 'true' FORMAT JSON RETURNING CLOB);
+    RETURN '{"ok":true}';
   EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
   END add_file;
 
@@ -274,25 +283,26 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
   END get_file;
 
   FUNCTION notifications (p_token VARCHAR2) RETURN CLOB IS
-    l_uid  NUMBER := uid(p_token);
-    l_json CLOB;
+    l_uid NUMBER := uid(p_token);
   BEGIN
-    SELECT JSON_ARRAYAGG(JSON_OBJECT('id' VALUE notif_id,'booking_id' VALUE booking_id,
-             'message' VALUE message,'is_read' VALUE is_read,
-             'at' VALUE TO_CHAR(created_at,'YYYY-MM-DD HH24:MI') RETURNING CLOB)
-             ORDER BY created_at DESC RETURNING CLOB)
-      INTO l_json FROM notifications WHERE user_id = l_uid;
-    RETURN JSON_OBJECT('ok' VALUE 'true' FORMAT JSON,
-                       'notifications' VALUE NVL(l_json,'[]') FORMAT JSON RETURNING CLOB);
-  EXCEPTION WHEN OTHERS THEN RETURN err(SQLERRM);
+    APEX_JSON.initialize_clob_output;
+    APEX_JSON.open_object; APEX_JSON.write('ok', TRUE); APEX_JSON.open_array('notifications');
+    FOR n IN (SELECT notif_id,booking_id,message,is_read,TO_CHAR(created_at,'YYYY-MM-DD HH24:MI') at
+              FROM notifications WHERE user_id = l_uid ORDER BY created_at DESC) LOOP
+      APEX_JSON.open_object; APEX_JSON.write('id',n.notif_id); APEX_JSON.write('booking_id',n.booking_id);
+      APEX_JSON.write('message',n.message); APEX_JSON.write('is_read',n.is_read); APEX_JSON.write('at',n.at); APEX_JSON.close_object;
+    END LOOP;
+    APEX_JSON.close_array; APEX_JSON.close_object;
+    RETURN APEX_JSON.get_clob_output;
+  EXCEPTION WHEN OTHERS THEN APEX_JSON.free_output; RETURN err(SQLERRM);
   END notifications;
 
   FUNCTION mark_read (p_token VARCHAR2) RETURN CLOB IS
     l_uid NUMBER := uid(p_token);
   BEGIN
-    UPDATE notifications SET is_read = 'Y' WHERE user_id = l_uid AND is_read = 'N';
+    UPDATE notifications SET is_read='Y' WHERE user_id = l_uid AND is_read='N';
     COMMIT;
-    RETURN JSON_OBJECT('ok' VALUE 'true' FORMAT JSON RETURNING CLOB);
+    RETURN '{"ok":true}';
   EXCEPTION WHEN OTHERS THEN RETURN err(SQLERRM);
   END mark_read;
 
