@@ -70,8 +70,14 @@ jobs:
           @bookings/api/install_api.sql
           prompt === Deploying install_ui.sql ===
           @bookings/api/install_ui.sql
-          prompt === Verifying api_pkg ===
-          select status from user_objects where object_name='API_PKG' and object_type='PACKAGE BODY';
+          prompt === Verifying api_pkg is VALID ===
+          declare n number; begin
+            select count(*) into n from user_objects
+             where object_name in ('API_PKG','BOOKING_PKG') and status='INVALID';
+            if n>0 then raise_application_error(-20000,'PL/SQL package INVALID after deploy'); end if;
+            dbms_output.put_line('api_pkg + booking_pkg VALID');
+          end;
+          /
           exit
           SQLCL
 
