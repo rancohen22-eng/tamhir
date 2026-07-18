@@ -223,7 +223,7 @@ function render(){
   const nav=document.getElementById('tabs'); nav.innerHTML='';
   tabsFor().forEach(([k,lbl])=>{ const b=document.createElement('button'); b.textContent=lbl;
     b.className=VIEW.tab===k?'sel':''; b.onclick=()=>{VIEW.tab=k;VIEW.bookingId=null;render();}; nav.appendChild(b); });
-  document.getElementById('foot').textContent=VIEW.lang==='en'?'Internal use · Arkia · live on Oracle':'לשימוש פנימי · ארקיע · מחובר לאורקל';
+  document.getElementById('foot').textContent=VIEW.lang==='en'?'Internal use · Arkia · live on Oracle · CI/CD ✓':'לשימוש פנימי · ארקיע · מחובר לאורקל · פריסה אוטומטית ✓';
   const app=document.getElementById('app');
   if(VIEW.tab==='notifications') return renderNotifications(app);
   if(VIEW.bookingId) return renderDetail(app,VIEW.bookingId);
