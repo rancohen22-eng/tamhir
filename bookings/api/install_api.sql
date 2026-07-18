@@ -150,7 +150,7 @@ CREATE OR REPLACE PACKAGE api_pkg AS
   FUNCTION  bootstrap    (p_token VARCHAR2) RETURN CLOB;
   FUNCTION  list_bookings(p_token VARCHAR2) RETURN CLOB;
   FUNCTION  get_booking  (p_token VARCHAR2, p_id NUMBER) RETURN CLOB;
-  FUNCTION  create_booking(p_token VARCHAR2, p_departure VARCHAR2, p_agent_id NUMBER, p_notes VARCHAR2,
+  FUNCTION  create_booking(p_token VARCHAR2, p_departure VARCHAR2, p_notes VARCHAR2,
                            p_pax NUMBER, p_pref_time VARCHAR2, p_wet_op NUMBER,
                            p_origin VARCHAR2, p_dest VARCHAR2) RETURN CLOB;
   FUNCTION  edit_booking (p_token VARCHAR2, p_id NUMBER, p_departure VARCHAR2, p_agent_id NUMBER,
@@ -315,7 +315,9 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
            JOIN app_users ini ON ini.user_id=b.initiator_id
            LEFT JOIN agents ag ON ag.agent_id=b.agent_id
            LEFT JOIN wet_operators wo ON wo.operator_id=b.wet_operator_id
-      WHERE l_all='Y' OR (l_agent IS NOT NULL AND b.agent_id=l_agent) OR (l_agent IS NULL AND b.dept_id=l_dept)
+      WHERE l_all='Y'
+         OR (l_agent IS NOT NULL AND (b.agent_id=l_agent OR (b.agent_id IS NULL AND b.status='AWAITING_QUOTE')))
+         OR (l_agent IS NULL AND b.dept_id=l_dept)
       ORDER BY b.booking_id DESC) LOOP
       APEX_JSON.open_object;
         APEX_JSON.write('id',b.booking_id); APEX_JSON.write('seq',b.booking_id); APEX_JSON.write('status',b.status);
@@ -385,22 +387,46 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
   EXCEPTION WHEN OTHERS THEN APEX_JSON.free_output; RETURN err(SQLERRM);
   END get_booking;
 
-  FUNCTION create_booking (p_token VARCHAR2, p_departure VARCHAR2, p_agent_id NUMBER, p_notes VARCHAR2,
+  -- התראה לכל הסוכנים הפעילים (מודל "בריכה" — כל סוכן יכול להגיב) — פעמון + מייל
+  PROCEDURE notify_agents (p_id NUMBER) IS
+  BEGIN
+    FOR a IN (SELECT ag.agent_id, u.user_id, u.email, u.pref_lang
+                FROM agents ag JOIN app_users u ON u.user_id = ag.user_id
+               WHERE ag.is_active='Y' AND u.is_active='Y') LOOP
+      INSERT INTO notifications (user_id, booking_id, notif_type, message)
+      VALUES (a.user_id, p_id, 'AWAITING_QUOTE',
+              CASE WHEN a.pref_lang='EN' THEN 'New quote request #'||p_id
+                   ELSE 'בקשה חדשה להצעת מחיר #'||p_id END);
+      IF a.email IS NOT NULL THEN
+        BEGIN
+          BEGIN APEX_UTIL.SET_SECURITY_GROUP_ID(APEX_UTIL.FIND_SECURITY_GROUP_ID('ARKIA')); EXCEPTION WHEN OTHERS THEN NULL; END;
+          APEX_MAIL.SEND(p_to => a.email, p_from => booking_pkg.g_mail_from,
+            p_subj => CASE WHEN a.pref_lang='EN' THEN 'Arkia — new quote request #'||p_id ELSE 'ארקיע — בקשה חדשה להצעת מחיר #'||p_id END,
+            p_body => CASE WHEN a.pref_lang='EN' THEN 'A new booking is awaiting your quote. Sign in to respond.' ELSE 'התקבלה בקשה חדשה הממתינה להצעת מחיר. היכנסו למערכת כדי להגיב.' END);
+        EXCEPTION WHEN OTHERS THEN NULL; END;
+      END IF;
+    END LOOP;
+    BEGIN APEX_MAIL.PUSH_QUEUE; EXCEPTION WHEN OTHERS THEN NULL; END;
+  END notify_agents;
+
+  FUNCTION create_booking (p_token VARCHAR2, p_departure VARCHAR2, p_notes VARCHAR2,
                            p_pax NUMBER, p_pref_time VARCHAR2, p_wet_op NUMBER,
                            p_origin VARCHAR2, p_dest VARCHAR2) RETURN CLOB IS
     l_uid NUMBER := uid(p_token); l_dept NUMBER; l_id NUMBER;
   BEGIN
     SELECT dept_id INTO l_dept FROM app_users WHERE user_id = l_uid;
-    -- בייזום אין עדיין מחיר (המחיר נקבע ע"י הסוכן בהצעה). מטבע ברירת מחדל בלבד.
+    -- מודל בריכה: אין סוכן ספציפי בייזום — ההזמנה נפתחת לכל הסוכנים.
+    -- אין עדיין מחיר (נקבע ע"י הסוכן שיגיש הצעה). מטבע ברירת מחדל בלבד.
     INSERT INTO bookings (dept_id, initiator_id, agent_id, approver_id, status, open_date,
                           departure_date, currency_code, quote_notes,
                           pax_count, pref_time, wet_operator_id, origin_iata, dest_iata)
-    VALUES (l_dept, l_uid, p_agent_id, booking_pkg.derive_approver(l_dept), 'NEW', TRUNC(SYSDATE),
+    VALUES (l_dept, l_uid, NULL, booking_pkg.derive_approver(l_dept), 'AWAITING_QUOTE', TRUNC(SYSDATE),
             TO_DATE(p_departure,'YYYY-MM-DD'), 'USD', p_notes,
             NVL(p_pax,1), p_pref_time, p_wet_op, UPPER(p_origin), UPPER(p_dest))
     RETURNING booking_id INTO l_id;
-    INSERT INTO booking_status_log (booking_id, from_status, to_status, action_by) VALUES (l_id, NULL, 'NEW', l_uid);
-    booking_pkg.send_for_quote(l_id, p_agent_id, l_uid);
+    INSERT INTO booking_status_log (booking_id, from_status, to_status, action_by, note)
+    VALUES (l_id, NULL, 'AWAITING_QUOTE', l_uid, 'נפתחה לכל הסוכנים');
+    notify_agents(l_id);
     COMMIT;
     RETURN '{"ok":true,"id":'||l_id||'}';
   EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
@@ -447,7 +473,11 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
     l_uid NUMBER := uid(p_token);
   BEGIN
     CASE p_action
-      WHEN 'submit_quote'   THEN booking_pkg.submit_quote(p_id, p_price, p_currency, p_trip, p_notes, l_uid);
+      WHEN 'submit_quote'   THEN
+        -- מודל בריכה: הסוכן שמגיש את ההצעה משויך להזמנה (אם עדיין לא משויכת)
+        UPDATE bookings SET agent_id = (SELECT MAX(agent_id) FROM agents WHERE user_id = l_uid)
+         WHERE booking_id = p_id AND agent_id IS NULL;
+        booking_pkg.submit_quote(p_id, p_price, p_currency, p_trip, p_notes, l_uid);
       WHEN 'approve'        THEN booking_pkg.approve(p_id, l_uid, p_notes);
       WHEN 'reject'         THEN booking_pkg.reject(p_id, l_uid, p_reason);
       WHEN 'ticket'         THEN booking_pkg.ticket(p_id, p_pnr, p_ref, TO_DATE(p_tdate,'YYYY-MM-DD'), l_uid);
@@ -725,7 +755,7 @@ BEGIN
   ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'bookings/create');
   ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'bookings/create', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
-    p_source=>q'[BEGIN api_pkg.emit(api_pkg.create_booking(:token, :departure, :agent_id, :notes, :pax, :pref_time, :wet_op, :origin, :dest)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.create_booking(:token, :departure, :notes, :pax, :pref_time, :wet_op, :origin, :dest)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
 
   -- bookings/edit (POST)
   ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'bookings/edit');

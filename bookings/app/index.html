@@ -134,7 +134,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-18.4';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-18.5';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight
@@ -175,7 +175,7 @@ const T = {
     loadTemplate:"טען תבנית",del:"מחק",wetOperators:"מפעילים רטובים",addWetOp:"הוסף מפעיל",all:"הכל",
     lastUpdate:"עדכון אחרון",avgPax:"ממוצע נוסעים",byStatus:"לפי סטטוס",
     airports:"שדות תעופה",country:"מדינה",addAirport:"הוסף/עדכן שדה תעופה",activate:"הפעל",deactivate:"השבת",
-    resetEmailed:"נשלח מייל עם סיסמה זמנית למשתמש:"},
+    resetEmailed:"נשלח מייל עם סיסמה זמנית למשתמש:",sendToAgents:"שלח לכל הסוכנים",chooseDest:"בחר יעד",openPool:"פתוחה לכל הסוכנים"},
   en:{title:"Flight Booking Documentation",logout:"Logout",bookings:"Bookings",newB:"New Booking",notifications:"Notifications",
     dept:"Department",status:"Status",initiator:"Initiator",agent:"Agent",approver:"Approver",openDate:"Open Date",
     departure:"Departure",ticketingDate:"Ticketing Date",price:"Price",currency:"Currency",pnr:"PNR",uref:"Unique Ref",
@@ -198,7 +198,7 @@ const T = {
     loadTemplate:"Load template",del:"Delete",wetOperators:"Wet operators",addWetOp:"Add operator",all:"All",
     lastUpdate:"Last update",avgPax:"Avg passengers",byStatus:"By status",
     airports:"Airports",country:"Country",addAirport:"Add/update airport",activate:"Activate",deactivate:"Deactivate",
-    resetEmailed:"A temporary password was emailed to the user:"}
+    resetEmailed:"A temporary password was emailed to the user:",sendToAgents:"Send to all agents",chooseDest:"Choose destination",openPool:"Open to all agents"}
 };
 function t(k){ return (T[VIEW.lang]||T.he)[k]||k; }
 function stLabel(code){ const s=STMAP[code]; return s?(VIEW.lang==='en'?s.en:s.he):code; }
@@ -208,6 +208,7 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;',
 function curSym(code){ const c=(BOOT.currencies||[]).find(x=>x.code===code); return c?c.symbol:''; }
 function deptName(d){ return VIEW.lang==='en'?(d.name_en||d.name_he):d.name_he; }
 function apLabel(iata){ if(!iata) return ''; const a=APMAP[iata]; return a?(iata+' · '+(VIEW.lang==='en'?a.name_en:a.name_he)):iata; }
+function airportOptions(sel){ return (BOOT.airports||[]).map(a=>`<option value="${a.iata}" ${a.iata===sel?'selected':''}>${esc(a.iata+' · '+(VIEW.lang==='en'?a.name_en:a.name_he))}</option>`).join(''); }
 function routeLabel(b){ if(!b.origin&&!b.dest) return t('none'); return (b.origin||'?')+' → '+(b.dest||'?'); }
 function isACMI(deptId){ const d=(BOOT.departments||[]).find(x=>x.id===deptId); return d&&d.code==='ACMI'; }
 
@@ -603,32 +604,30 @@ function delTpl(){
 /* ── הזמנה חדשה ── */
 function renderNew(app){
   const dep=BOOT.departments.find(d=>d.id===SES.user.dept_id);
-  const agentOpts=BOOT.agents.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
   const acmi=isACMI(SES.user.dept_id);
   const wetOpts=(BOOT.wet_operators||[]).map(w=>`<option value="${w.id}">${esc(VIEW.lang==='en'?w.name_en:w.name_he)}</option>`).join('');
   app.innerHTML=`<div class="card"><h2>${t('newB')}</h2>
-    <p class="muted">${t('dept')}: <b>${dep?esc(deptName(dep)):t('none')}</b></p>
+    <p class="muted">${t('dept')}: <b>${dep?esc(deptName(dep)):t('none')}</b> · <span class="pill">${t('openPool')}</span></p>
     <div class="rowflex">
       <div><label class="f">${t('departure')} *</label><input id="n_dep" class="fld" type="date"></div>
       <div><label class="f">${t('prefTime')} ${t('optional')}</label><input id="n_time" class="fld" type="time"></div>
       <div><label class="f">${t('pax')}</label><input id="n_pax" class="fld" type="number" min="1" value="1"></div>
     </div>
     <div class="rowflex">
-      <div><label class="f">${t('origin')} (IATA)</label><input id="n_org" class="fld" list="airportsList" dir="ltr" placeholder="TLV"></div>
-      <div><label class="f">${t('dest')} (IATA)</label><input id="n_dst" class="fld" list="airportsList" dir="ltr" placeholder="JFK"></div>
+      <div><label class="f">${t('origin')}</label><select id="n_org" class="fld"><option value="">${t('none')}</option>${airportOptions('TLV')}</select></div>
+      <div><label class="f">${t('dest')}</label><select id="n_dst" class="fld"><option value="">${t('chooseDest')}</option>${airportOptions('')}</select></div>
       ${acmi?`<div><label class="f">${t('wetOp')}</label><select id="n_wet" class="fld"><option value="">${t('none')}</option>${wetOpts}</select></div>`:''}
     </div>
-    <label class="f">${t('chooseAgent')} *</label><select id="n_agent" class="fld"><option value="">${t('none')}</option>${agentOpts}</select>
     <label class="f">${t('quoteNotes')}</label><textarea id="n_note" class="fld" rows="2"></textarea>
-    <div class="btnrow"><button class="btn ok" onclick="createBooking()">${t('sendToAgent')}</button></div>
+    <div class="btnrow"><button class="btn ok" onclick="createBooking()">${t('sendToAgents')}</button></div>
     <div id="n_err" style="color:var(--danger);margin-top:6px"></div></div>`;
 }
 async function createBooking(){
-  const dep=document.getElementById('n_dep').value, agent=document.getElementById('n_agent').value;
-  if(!dep||!agent){ document.getElementById('n_err').textContent=t('required2'); return; }
+  const dep=document.getElementById('n_dep').value;
+  if(!dep){ document.getElementById('n_err').textContent=t('required2'); return; }
   const wetEl=document.getElementById('n_wet');
   spin(true);
-  const r=await api('bookings/create',{token:SES.token,departure:dep,agent_id:agent,
+  const r=await api('bookings/create',{token:SES.token,departure:dep,
     notes:document.getElementById('n_note').value||'',
     pax:document.getElementById('n_pax').value||'1',
     pref_time:document.getElementById('n_time').value||'',
@@ -703,7 +702,6 @@ function canEdit(b){
   return false;
 }
 function renderEdit(app,b){
-  const agentOpts=BOOT.agents.map(a=>`<option value="${a.id}" ${a.id===b.agent_id?'selected':''}>${esc(a.name)}</option>`).join('');
   const acmi=b.dept_code==='ACMI'||isACMI(b.dept_id);
   const wetOpts=(BOOT.wet_operators||[]).map(w=>`<option value="${w.id}" ${w.id===b.wet_op_id?'selected':''}>${esc(VIEW.lang==='en'?w.name_en:w.name_he)}</option>`).join('');
   app.innerHTML=`<div class="card">
@@ -715,11 +713,10 @@ function renderEdit(app,b){
       <div><label class="f">${t('pax')}</label><input id="e_pax" class="fld" type="number" min="1" value="${b.pax||1}"></div>
     </div>
     <div class="rowflex">
-      <div><label class="f">${t('origin')} (IATA)</label><input id="e_org" class="fld" list="airportsList" dir="ltr" value="${esc(b.origin||'')}"></div>
-      <div><label class="f">${t('dest')} (IATA)</label><input id="e_dst" class="fld" list="airportsList" dir="ltr" value="${esc(b.dest||'')}"></div>
+      <div><label class="f">${t('origin')}</label><select id="e_org" class="fld"><option value="">${t('none')}</option>${airportOptions(b.origin||'')}</select></div>
+      <div><label class="f">${t('dest')}</label><select id="e_dst" class="fld"><option value="">${t('chooseDest')}</option>${airportOptions(b.dest||'')}</select></div>
       ${acmi?`<div><label class="f">${t('wetOp')}</label><select id="e_wet" class="fld"><option value="">${t('none')}</option>${wetOpts}</select></div>`:''}
     </div>
-    <label class="f">${t('agent')}</label><select id="e_agent" class="fld"><option value="">${t('none')}</option>${agentOpts}</select>
     <label class="f">${t('quoteNotes')}</label><textarea id="e_note" class="fld" rows="2">${esc(b.quote_notes||'')}</textarea>
     <div class="btnrow"><button class="btn ok" onclick="saveEdit(${b.id})">${t('save')}</button>
       <button class="btn ghost" onclick="VIEW.editing=false;render()">${t('back')}</button></div>
@@ -730,7 +727,6 @@ async function saveEdit(id){
   spin(true);
   const r=await api('bookings/edit',{token:SES.token,id:id,
     departure:document.getElementById('e_dep').value||'',
-    agent_id:document.getElementById('e_agent').value||'',
     notes:document.getElementById('e_note').value||'',
     pax:document.getElementById('e_pax').value||'',
     pref_time:document.getElementById('e_time').value||'',
@@ -743,10 +739,11 @@ async function saveEdit(id){
 }
 function actionsHtml(b){
   const isAgent = hasRole('AGENT') && SES.agent_id && b.agent_id===SES.agent_id;
+  const canQuote = hasRole('AGENT') && SES.agent_id && (b.agent_id===SES.agent_id || !b.agent_id);
   const isApprover = hasRole('APPROVER') && (b.approver_id===SES.user.id || SES.user.dept_id===b.dept_id);
   const isInitiator = b.initiator_id===SES.user.id;
   let h='';
-  if(b.status==='AWAITING_QUOTE'&&isAgent) h+=`<button class="btn" onclick="quoteForm(${b.id},'${b.currency}')">${t('submitQuote')}</button>`;
+  if(b.status==='AWAITING_QUOTE'&&canQuote) h+=`<button class="btn" onclick="quoteForm(${b.id},'${b.currency}')">${t('submitQuote')}</button>`;
   if(b.status==='QUOTE_RECEIVED'&&isApprover){ h+=`<button class="btn ok" onclick="act(${b.id},'approve')">${t('approve')}</button>`;
     h+=`<button class="btn danger" onclick="actReason(${b.id},'reject')">${t('reject')}</button>`; }
   if(b.status==='APPROVED'&&isAgent) h+=`<button class="btn" onclick="ticketForm(${b.id})">${t('ticket')}</button>`;
