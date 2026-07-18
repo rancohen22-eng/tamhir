@@ -153,7 +153,9 @@ const T = {
     uploadScreenshot:"צילום ממערכת ההזמנות",uploadTicket:"מסמך/תמונת כרטוס",noBookings:"אין הזמנות להצגה",
     markRead:"סמן הכל כנקרא",noNotif:"אין התראות",estPrice:"מחיר משוער",chooseAgent:"בחר סוכן",required:"שדה חובה",
     download:"הורדה",view:"צפייה",cobrandNote:"בשיתוף",search:"חיפוש...",required2:"נא למלא שדות חובה",
-    finance:"כספים",total:"סה\"כ הזמנות",open:"פתוחות",ticketed:"כורטסו",cancelled:"בוטלו",exportExcel:"ייצוא Excel (CSV)"},
+    finance:"כספים",total:"סה\"כ הזמנות",open:"פתוחות",ticketed:"כורטסו",cancelled:"בוטלו",exportExcel:"ייצוא Excel (CSV)",
+    admin:"ניהול",departments:"מחלקות",users:"משתמשים",agents:"סוכנים",currencies:"מטבעות",roles:"תפקידים",
+    name:"שם",code:"קוד",email:"אימייל",add:"הוסף",changePw:"שנה סיסמה",saved:"נשמר",role:"תפקיד"},
   en:{title:"Flight Booking Documentation",logout:"Logout",bookings:"Bookings",newB:"New Booking",notifications:"Notifications",
     dept:"Department",status:"Status",initiator:"Initiator",agent:"Agent",approver:"Approver",openDate:"Open Date",
     departure:"Departure",ticketingDate:"Ticketing Date",price:"Price",currency:"Currency",pnr:"PNR",uref:"Unique Ref",
@@ -163,7 +165,9 @@ const T = {
     uploadScreenshot:"Booking-system screenshot",uploadTicket:"Ticket document/image",noBookings:"No bookings to show",
     markRead:"Mark all read",noNotif:"No notifications",estPrice:"Estimated price",chooseAgent:"Choose agent",required:"Required",
     download:"Download",view:"View",cobrandNote:"With",search:"Search...",required2:"Please fill required fields",
-    finance:"Finance",total:"Total bookings",open:"Open",ticketed:"Ticketed",cancelled:"Cancelled",exportExcel:"Export Excel (CSV)"}
+    finance:"Finance",total:"Total bookings",open:"Open",ticketed:"Ticketed",cancelled:"Cancelled",exportExcel:"Export Excel (CSV)",
+    admin:"Admin",departments:"Departments",users:"Users",agents:"Agents",currencies:"Currencies",roles:"Roles",
+    name:"Name",code:"Code",email:"Email",add:"Add",changePw:"Change password",saved:"Saved",role:"Role"}
 };
 function t(k){ return (T[VIEW.lang]||T.he)[k]||k; }
 function stLabel(code){ const s=STMAP[code]; return s?(VIEW.lang==='en'?s.en:s.he):code; }
@@ -213,6 +217,7 @@ function tabsFor(){
   const tabs=[['bookings',t('bookings')]];
   if(hasRole('INITIATOR')) tabs.push(['new',t('newB')]);
   if(hasRole('FINANCE')||hasRole('ADMIN')) tabs.push(['finance',t('finance')]);
+  if(hasRole('ADMIN')) tabs.push(['admin',t('admin')]);
   return tabs;
 }
 async function refreshUnread(){
@@ -232,6 +237,7 @@ function render(){
   if(VIEW.bookingId) return renderDetail(app,VIEW.bookingId);
   if(VIEW.tab==='new') return renderNew(app);
   if(VIEW.tab==='finance') return renderFinance(app);
+  if(VIEW.tab==='admin') return renderAdmin(app);
   return renderBookings(app);
 }
 
@@ -257,6 +263,70 @@ async function renderBookings(app){
 function filterBk(){ const q=document.getElementById('bkSearch').value.toLowerCase();
   document.querySelectorAll('#bkTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
 function openBk(id){ VIEW.bookingId=id; render(); }
+
+/* ── ניהול (ADMIN) ── */
+const ROLES=['INITIATOR','APPROVER','AGENT','FINANCE','ADMIN'];
+async function renderAdmin(app){
+  app.innerHTML=`<div class="card"><h2>${t('admin')}</h2><div class="muted">…</div></div>`;
+  const ur=await api('admin/users',{token:SES.token});
+  const users=ur.ok?(ur.users||[]):[];
+  const deptOpts=BOOT.departments.map(d=>`<option value="${d.id}">${esc(deptName(d))}</option>`).join('');
+  const roleOpts=ROLES.map(r=>`<option value="${r}">${r}</option>`).join('');
+  app.innerHTML=`
+  <div class="card"><h2>${t('departments')}</h2>
+    <div class="tablewrap"><table><thead><tr><th>${t('name')}</th><th>${t('code')}</th></tr></thead><tbody>${
+      BOOT.departments.map(d=>`<tr><td>${esc(deptName(d))}</td><td>${esc(d.code)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="rowflex" style="margin-top:8px">
+      <div><input id="ad_code" class="fld" placeholder="${t('code')}"></div>
+      <div><input id="ad_he" class="fld" placeholder="שם (עברית)"></div>
+      <div><input id="ad_en" class="fld" placeholder="Name (English)"></div>
+      <div style="flex:0"><button class="btn sm" onclick="addDept()">${t('add')}</button></div>
+    </div><div id="ad_err" style="color:var(--danger);font-size:13px"></div>
+  </div>
+  <div class="card"><h2>${t('users')}</h2>
+    <div class="tablewrap"><table><thead><tr><th>username</th><th>${t('name')}</th><th>${t('dept')}</th><th>${t('roles')}</th><th></th></tr></thead>
+    <tbody>${users.map(u=>`<tr><td>${esc(u.username)}</td><td>${esc(u.full_name)}</td><td>${esc(u.dept||t('none'))}</td>
+      <td>${(u.roles||'').split(',').filter(x=>x).map(r=>`<span class="pill">${r}</span>`).join(' ')}</td>
+      <td><button class="btn ghost sm" onclick="changePw('${esc(u.username)}')">${t('changePw')}</button></td></tr>`).join('')}</tbody></table></div>
+    <h3>${t('add')} · ${t('users')}</h3>
+    <div class="rowflex">
+      <div><input id="au_un" class="fld" placeholder="username" dir="ltr"></div>
+      <div><input id="au_fn" class="fld" placeholder="${t('name')}"></div>
+      <div><input id="au_em" class="fld" placeholder="${t('email')}" dir="ltr"></div>
+    </div>
+    <div class="rowflex">
+      <div><select id="au_dept" class="fld"><option value="">${t('none')}</option>${deptOpts}</select></div>
+      <div><select id="au_role" class="fld">${roleOpts}</select></div>
+      <div><input id="au_pw" class="fld" placeholder="${t('changePw')} (Arkia2026!)" dir="ltr"></div>
+      <div style="flex:0"><button class="btn sm" onclick="addUser()">${t('add')}</button></div>
+    </div><div id="au_err" style="color:var(--danger);font-size:13px"></div>
+  </div>
+  <div class="card"><h2>${t('currencies')}</h2>
+    <div class="tablewrap"><table><thead><tr><th>${t('code')}</th><th>${t('symbol')||'symbol'}</th></tr></thead>
+    <tbody>${BOOT.currencies.map(c=>`<tr><td>${c.code}</td><td>${c.symbol}</td></tr>`).join('')}</tbody></table></div>
+  </div>`;
+}
+async function refreshBoot(){ const b=await api('bootstrap',{token:SES.token}); if(b.ok){ BOOT=b; STMAP={}; (b.statuses||[]).forEach(s=>STMAP[s.code]={he:s.he,en:s.en,terminal:s.terminal}); } }
+async function addDept(){
+  const code=document.getElementById('ad_code').value.trim(), he=document.getElementById('ad_he').value.trim(), en=document.getElementById('ad_en').value.trim();
+  if(!code||!he){ document.getElementById('ad_err').textContent=t('required2'); return; }
+  spin(true); const r=await api('admin/dept/create',{token:SES.token,code:code,name_he:he,name_en:en}); await refreshBoot(); spin(false);
+  if(!r.ok){ document.getElementById('ad_err').textContent=r.error; return; } render();
+}
+async function addUser(){
+  const un=document.getElementById('au_un').value.trim(), fn=document.getElementById('au_fn').value.trim();
+  if(!un||!fn){ document.getElementById('au_err').textContent=t('required2'); return; }
+  spin(true);
+  const r=await api('admin/user/create',{token:SES.token,username:un,full:fn,email:document.getElementById('au_em').value.trim(),
+    dept_id:document.getElementById('au_dept').value||'',role:document.getElementById('au_role').value,password:document.getElementById('au_pw').value.trim()});
+  await refreshBoot(); spin(false);
+  if(!r.ok){ document.getElementById('au_err').textContent=r.error; return; } render();
+}
+async function changePw(username){
+  const p=prompt(t('changePw')+' · '+username+':'); if(!p) return;
+  spin(true); const r=await api('admin/setpw',{token:SES.token,username:username,password:p}); spin(false);
+  alert(r.ok?t('saved'):r.error);
+}
 
 /* ── כספים / דוחות ── */
 let FIN_CACHE=[];

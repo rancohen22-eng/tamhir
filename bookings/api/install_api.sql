@@ -48,6 +48,12 @@ CREATE OR REPLACE PACKAGE api_pkg AS
   PROCEDURE get_file     (p_id NUMBER, o_blob OUT BLOB, o_mime OUT VARCHAR2, o_name OUT VARCHAR2);
   FUNCTION  notifications(p_token VARCHAR2) RETURN CLOB;
   FUNCTION  mark_read    (p_token VARCHAR2) RETURN CLOB;
+  -- ── ניהול (ADMIN בלבד) ──
+  FUNCTION  admin_users  (p_token VARCHAR2) RETURN CLOB;
+  FUNCTION  admin_create_dept (p_token VARCHAR2, p_code VARCHAR2, p_name_he VARCHAR2, p_name_en VARCHAR2) RETURN CLOB;
+  FUNCTION  admin_create_user (p_token VARCHAR2, p_username VARCHAR2, p_full VARCHAR2, p_email VARCHAR2,
+                               p_dept_id NUMBER, p_role VARCHAR2, p_password VARCHAR2) RETURN CLOB;
+  FUNCTION  admin_setpw  (p_token VARCHAR2, p_username VARCHAR2, p_password VARCHAR2) RETURN CLOB;
 END api_pkg;
 /
 
@@ -306,6 +312,75 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
   EXCEPTION WHEN OTHERS THEN RETURN err(SQLERRM);
   END mark_read;
 
+  --------------------------------------------------------------------------------
+  -- ניהול (ADMIN בלבד)
+  --------------------------------------------------------------------------------
+  FUNCTION admin_guard (p_token VARCHAR2) RETURN NUMBER IS
+    l_uid NUMBER := uid(p_token);
+  BEGIN
+    IF has_role(l_uid,'ADMIN') <> 'Y' THEN RAISE_APPLICATION_ERROR(-20403,'forbidden'); END IF;
+    RETURN l_uid;
+  END admin_guard;
+
+  FUNCTION admin_users (p_token VARCHAR2) RETURN CLOB IS
+    l_uid NUMBER := admin_guard(p_token);
+  BEGIN
+    APEX_JSON.initialize_clob_output;
+    APEX_JSON.open_object; APEX_JSON.write('ok', TRUE); APEX_JSON.open_array('users');
+    FOR u IN (
+      SELECT u.user_id, u.username, u.full_name, u.email, u.dept_id, d.name_he dh,
+             (SELECT LISTAGG(role_code, ',') WITHIN GROUP (ORDER BY role_code)
+                FROM user_roles r WHERE r.user_id = u.user_id) roles
+      FROM app_users u LEFT JOIN departments d ON d.dept_id = u.dept_id
+      ORDER BY u.user_id
+    ) LOOP
+      APEX_JSON.open_object;
+        APEX_JSON.write('id',u.user_id); APEX_JSON.write('username',u.username);
+        APEX_JSON.write('full_name',u.full_name); APEX_JSON.write('email',u.email);
+        APEX_JSON.write('dept_id',u.dept_id); APEX_JSON.write('dept',u.dh); APEX_JSON.write('roles',u.roles);
+      APEX_JSON.close_object;
+    END LOOP;
+    APEX_JSON.close_array; APEX_JSON.close_object;
+    RETURN APEX_JSON.get_clob_output;
+  EXCEPTION WHEN OTHERS THEN APEX_JSON.free_output; RETURN err(SQLERRM);
+  END admin_users;
+
+  FUNCTION admin_create_dept (p_token VARCHAR2, p_code VARCHAR2, p_name_he VARCHAR2, p_name_en VARCHAR2) RETURN CLOB IS
+    l_uid NUMBER := admin_guard(p_token);
+  BEGIN
+    INSERT INTO departments (dept_code, name_he, name_en)
+    VALUES (p_code, p_name_he, NVL(p_name_en, p_name_he));
+    COMMIT; RETURN '{"ok":true}';
+  EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
+  END admin_create_dept;
+
+  FUNCTION admin_create_user (p_token VARCHAR2, p_username VARCHAR2, p_full VARCHAR2, p_email VARCHAR2,
+                              p_dept_id NUMBER, p_role VARCHAR2, p_password VARCHAR2) RETURN CLOB IS
+    l_uid NUMBER := admin_guard(p_token);
+    l_new NUMBER;
+  BEGIN
+    INSERT INTO app_users (username, full_name, email, dept_id, pref_lang)
+    VALUES (LOWER(p_username), p_full, p_email, p_dept_id, 'HE') RETURNING user_id INTO l_new;
+    INSERT INTO user_roles (user_id, role_code) VALUES (l_new, p_role);
+    IF p_role = 'AGENT' THEN
+      INSERT INTO agents (user_id, agency_name) VALUES (l_new, p_full);
+    END IF;
+    IF p_role = 'APPROVER' AND p_dept_id IS NOT NULL THEN
+      INSERT INTO dept_approvers (dept_id, approver_user_id) VALUES (p_dept_id, l_new);
+    END IF;
+    booking_pkg.set_password(LOWER(p_username), NVL(p_password, 'Arkia2026!'));
+    COMMIT; RETURN '{"ok":true,"id":'||l_new||'}';
+  EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
+  END admin_create_user;
+
+  FUNCTION admin_setpw (p_token VARCHAR2, p_username VARCHAR2, p_password VARCHAR2) RETURN CLOB IS
+    l_uid NUMBER := admin_guard(p_token);
+  BEGIN
+    booking_pkg.set_password(LOWER(p_username), p_password);
+    COMMIT; RETURN '{"ok":true}';
+  EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
+  END admin_setpw;
+
 END api_pkg;
 /
 
@@ -389,6 +464,30 @@ BEGIN
   ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'files/:id', p_method=>'GET',
     p_source_type=>ORDS.source_type_media,
     p_source=>q'[SELECT NVL(mime_type,'application/octet-stream') AS content_type, file_blob FROM booking_files WHERE file_id = :id]');
+
+  -- admin/users (POST = list)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'admin/users');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/users', p_method=>'POST',
+    p_source_type=>ORDS.source_type_plsql,
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_users(:token)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
+
+  -- admin/dept/create (POST)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'admin/dept/create');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/dept/create', p_method=>'POST',
+    p_source_type=>ORDS.source_type_plsql,
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_create_dept(:token, :code, :name_he, :name_en)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
+
+  -- admin/user/create (POST)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'admin/user/create');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/user/create', p_method=>'POST',
+    p_source_type=>ORDS.source_type_plsql,
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_create_user(:token, :username, :full, :email, :dept_id, :role, :password)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
+
+  -- admin/setpw (POST)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'admin/setpw');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/setpw', p_method=>'POST',
+    p_source_type=>ORDS.source_type_plsql,
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_setpw(:token, :username, :password)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
 
   COMMIT;
 END;
