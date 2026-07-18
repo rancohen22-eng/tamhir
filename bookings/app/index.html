@@ -168,7 +168,8 @@ const T = {
     dashboard:"סיכום",filters:"סינון",fromDate:"מתאריך",toDate:"עד תאריך",applyFilters:"החל סינון",clearFilters:"נקה",
     columns:"עמודות לייצוא",reportTemplate:"תבנית דוח",saveTemplate:"שמור תבנית",templateName:"שם התבנית",
     loadTemplate:"טען תבנית",del:"מחק",wetOperators:"מפעילים רטובים",addWetOp:"הוסף מפעיל",all:"הכל",
-    lastUpdate:"עדכון אחרון",avgPax:"ממוצע נוסעים",byStatus:"לפי סטטוס"},
+    lastUpdate:"עדכון אחרון",avgPax:"ממוצע נוסעים",byStatus:"לפי סטטוס",
+    airports:"שדות תעופה",country:"מדינה",addAirport:"הוסף/עדכן שדה תעופה",activate:"הפעל",deactivate:"השבת"},
   en:{title:"Flight Booking Documentation",logout:"Logout",bookings:"Bookings",newB:"New Booking",notifications:"Notifications",
     dept:"Department",status:"Status",initiator:"Initiator",agent:"Agent",approver:"Approver",openDate:"Open Date",
     departure:"Departure",ticketingDate:"Ticketing Date",price:"Price",currency:"Currency",pnr:"PNR",uref:"Unique Ref",
@@ -189,7 +190,8 @@ const T = {
     dashboard:"Overview",filters:"Filters",fromDate:"From date",toDate:"To date",applyFilters:"Apply",clearFilters:"Clear",
     columns:"Export columns",reportTemplate:"Report template",saveTemplate:"Save template",templateName:"Template name",
     loadTemplate:"Load template",del:"Delete",wetOperators:"Wet operators",addWetOp:"Add operator",all:"All",
-    lastUpdate:"Last update",avgPax:"Avg passengers",byStatus:"By status"}
+    lastUpdate:"Last update",avgPax:"Avg passengers",byStatus:"By status",
+    airports:"Airports",country:"Country",addAirport:"Add/update airport",activate:"Activate",deactivate:"Deactivate"}
 };
 function t(k){ return (T[VIEW.lang]||T.he)[k]||k; }
 function stLabel(code){ const s=STMAP[code]; return s?(VIEW.lang==='en'?s.en:s.he):code; }
@@ -319,6 +321,8 @@ async function renderAdmin(app){
   const ur=await api('admin/users',{token:SES.token});
   ADMIN_USERS=ur.ok?(ur.users||[]):[];
   const users=ADMIN_USERS;
+  const apr=await api('admin/airports',{token:SES.token});
+  const airports=apr.ok?(apr.airports||[]):[];
   const deptOpts=BOOT.departments.map(d=>`<option value="${d.id}">${esc(deptName(d))}</option>`).join('');
   const roleOpts=ROLES.map(r=>`<option value="${r}">${r}</option>`).join('');
   app.innerHTML=`
@@ -364,10 +368,51 @@ async function renderAdmin(app){
       <div style="flex:0"><button class="btn sm" onclick="addWetOp()">${t('addWetOp')}</button></div>
     </div><div id="wo_err" style="color:var(--danger);font-size:13px"></div>
   </div>
+  <div class="card"><h2>${t('airports')} <span class="muted" style="font-size:12px">(${airports.length})</span></h2>
+    <input id="ap_search" class="fld" placeholder="${t('search')}" oninput="filterAp()">
+    <div class="tablewrap" style="margin-top:8px"><table id="apTable"><thead><tr>
+      <th>IATA</th><th>${t('name')} (HE)</th><th>Name (EN)</th><th>${t('country')}</th><th>${t('status')}</th><th></th></tr></thead>
+    <tbody>${airports.map(a=>`<tr>
+      <td dir="ltr"><b>${esc(a.iata)}</b></td><td>${esc(a.name_he||'')}</td><td dir="ltr">${esc(a.name_en||'')}</td>
+      <td>${esc(a.country||'')}</td><td>${a.is_active==='Y'?`<span class="pill">${t('active')}</span>`:`<span class="muted">${t('inactive')}</span>`}</td>
+      <td><div class="btnrow" style="margin:0">
+        <button class="btn ghost sm" onclick="editAirport('${esc(a.iata)}','${esc(a.name_he||'')}','${esc(a.name_en||'')}','${esc(a.country||'')}')">${t('edit')}</button>
+        <button class="btn ghost sm" onclick="toggleAirport('${esc(a.iata)}','${a.is_active==='Y'?'N':'Y'}')">${a.is_active==='Y'?t('deactivate'):t('activate')}</button>
+      </div></td></tr>`).join('')||`<tr><td colspan="6" class="muted">${t('none')}</td></tr>`}</tbody></table></div>
+    <h3>${t('addAirport')}</h3>
+    <div class="rowflex">
+      <div style="flex:0 0 90px"><input id="ap_iata" class="fld" placeholder="IATA" dir="ltr" maxlength="4"></div>
+      <div><input id="ap_he" class="fld" placeholder="שם (עברית)"></div>
+      <div><input id="ap_en" class="fld" placeholder="Name (English)" dir="ltr"></div>
+      <div><input id="ap_country" class="fld" placeholder="${t('country')}"></div>
+      <div style="flex:0"><button class="btn sm" onclick="saveAirport()">${t('save')}</button></div>
+    </div><div id="ap_err" style="color:var(--danger);font-size:13px"></div>
+  </div>
   <div class="card"><h2>${t('currencies')}</h2>
     <div class="tablewrap"><table><thead><tr><th>${t('code')}</th><th>${t('symbol')}</th></tr></thead>
     <tbody>${BOOT.currencies.map(c=>`<tr><td>${c.code}</td><td>${c.symbol}</td></tr>`).join('')}</tbody></table></div>
   </div>`;
+}
+function filterAp(){ const q=document.getElementById('ap_search').value.toLowerCase();
+  document.querySelectorAll('#apTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
+function editAirport(iata,he,en,country){
+  document.getElementById('ap_iata').value=iata; document.getElementById('ap_he').value=he;
+  document.getElementById('ap_en').value=en; document.getElementById('ap_country').value=country;
+  document.getElementById('ap_iata').scrollIntoView({behavior:'smooth',block:'center'});
+}
+async function saveAirport(){
+  const iata=document.getElementById('ap_iata').value.trim().toUpperCase();
+  if(!iata){ document.getElementById('ap_err').textContent=t('required2'); return; }
+  spin(true);
+  const r=await api('admin/airport/save',{token:SES.token,iata:iata,
+    name_he:document.getElementById('ap_he').value.trim(),name_en:document.getElementById('ap_en').value.trim(),
+    country:document.getElementById('ap_country').value.trim(),is_active:'Y'});
+  await refreshBoot(); spin(false);
+  if(!r.ok){ document.getElementById('ap_err').textContent=r.error; return; } render();
+}
+async function toggleAirport(iata,to){
+  spin(true); const r=await api('admin/airport/save',{token:SES.token,iata:iata,is_active:to}); await refreshBoot(); spin(false);
+  if(!r.ok){ alert(r.error); return; } render();
 }
 async function refreshBoot(){ const b=await api('bootstrap',{token:SES.token}); if(b.ok){ BOOT=b; STMAP={}; (b.statuses||[]).forEach(s=>STMAP[s.code]={he:s.he,en:s.en,terminal:s.terminal});
   APMAP={}; (b.airports||[]).forEach(a=>APMAP[a.iata]={name_he:a.name_he,name_en:a.name_en}); buildAirportList(); } }

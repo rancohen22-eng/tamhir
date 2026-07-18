@@ -174,6 +174,9 @@ CREATE OR REPLACE PACKAGE api_pkg AS
   FUNCTION  admin_setpw  (p_token VARCHAR2, p_username VARCHAR2, p_password VARCHAR2) RETURN CLOB;
   FUNCTION  admin_reset_pw (p_token VARCHAR2, p_user_id NUMBER) RETURN CLOB;
   FUNCTION  admin_create_wetop (p_token VARCHAR2, p_name_he VARCHAR2, p_name_en VARCHAR2) RETURN CLOB;
+  FUNCTION  admin_airports (p_token VARCHAR2) RETURN CLOB;
+  FUNCTION  admin_save_airport (p_token VARCHAR2, p_iata VARCHAR2, p_name_he VARCHAR2, p_name_en VARCHAR2,
+                                p_country VARCHAR2, p_is_active VARCHAR2) RETURN CLOB;
 END api_pkg;
 /
 
@@ -608,6 +611,42 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
   EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
   END admin_create_wetop;
 
+  -- רשימת כל שדות התעופה (כולל לא-פעילים) — לניהול ע"י אדמין
+  FUNCTION admin_airports (p_token VARCHAR2) RETURN CLOB IS
+    l_uid NUMBER := admin_guard(p_token);
+  BEGIN
+    APEX_JSON.initialize_clob_output;
+    APEX_JSON.open_object; APEX_JSON.write('ok', TRUE); APEX_JSON.open_array('airports');
+    FOR a IN (SELECT iata,name_he,name_en,country,is_active FROM airports ORDER BY iata) LOOP
+      APEX_JSON.open_object; APEX_JSON.write('iata',a.iata); APEX_JSON.write('name_he',a.name_he);
+      APEX_JSON.write('name_en',a.name_en); APEX_JSON.write('country',a.country);
+      APEX_JSON.write('is_active',a.is_active); APEX_JSON.close_object;
+    END LOOP;
+    APEX_JSON.close_array; APEX_JSON.close_object;
+    RETURN APEX_JSON.get_clob_output;
+  EXCEPTION WHEN OTHERS THEN APEX_JSON.free_output; RETURN err(SQLERRM);
+  END admin_airports;
+
+  -- הוספה/עדכון שדה תעופה (MERGE לפי IATA) + הפעלה/השבתה
+  FUNCTION admin_save_airport (p_token VARCHAR2, p_iata VARCHAR2, p_name_he VARCHAR2, p_name_en VARCHAR2,
+                               p_country VARCHAR2, p_is_active VARCHAR2) RETURN CLOB IS
+    l_uid  NUMBER := admin_guard(p_token);
+    l_iata VARCHAR2(4) := UPPER(TRIM(p_iata));
+  BEGIN
+    IF l_iata IS NULL THEN RETURN err('iata_required'); END IF;
+    MERGE INTO airports a USING (SELECT l_iata AS iata FROM dual) s ON (a.iata = s.iata)
+    WHEN MATCHED THEN UPDATE SET
+      name_he   = NVL(p_name_he, a.name_he),
+      name_en   = NVL(p_name_en, a.name_en),
+      country   = NVL(p_country, a.country),
+      is_active = NVL(p_is_active, a.is_active)
+    WHEN NOT MATCHED THEN INSERT (iata, name_he, name_en, city_he, city_en, country, is_active)
+      VALUES (l_iata, p_name_he, NVL(p_name_en, p_name_he), p_name_he, NVL(p_name_en, p_name_he),
+              p_country, NVL(p_is_active,'Y'));
+    COMMIT; RETURN '{"ok":true}';
+  EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
+  END admin_save_airport;
+
 END api_pkg;
 /
 
@@ -739,6 +778,18 @@ BEGIN
   ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/wetop/create', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
     p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_create_wetop(:token, :name_he, :name_en)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
+
+  -- admin/airports (POST = list כולל לא-פעילים)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'admin/airports');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/airports', p_method=>'POST',
+    p_source_type=>ORDS.source_type_plsql,
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_airports(:token)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
+
+  -- admin/airport/save (POST = upsert + הפעלה/השבתה)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'admin/airport/save');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/airport/save', p_method=>'POST',
+    p_source_type=>ORDS.source_type_plsql,
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_save_airport(:token, :iata, :name_he, :name_en, :country, :is_active)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
 
   COMMIT;
 END;
