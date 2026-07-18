@@ -492,7 +492,9 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
           BEGIN APEX_UTIL.SET_SECURITY_GROUP_ID(APEX_UTIL.FIND_SECURITY_GROUP_ID('ARKIA')); EXCEPTION WHEN OTHERS THEN NULL; END;
           APEX_MAIL.SEND(p_to => a.email, p_from => booking_pkg.g_mail_from,
             p_subj => CASE WHEN a.pref_lang='EN' THEN 'Arkia — new quote request #'||p_id ELSE 'ארקיע — בקשה חדשה להצעת מחיר #'||p_id END,
-            p_body => CASE WHEN a.pref_lang='EN' THEN 'A new booking is awaiting your quote. Sign in to respond.' ELSE 'התקבלה בקשה חדשה הממתינה להצעת מחיר. היכנסו למערכת כדי להגיב.' END);
+            p_body => (CASE WHEN a.pref_lang='EN' THEN 'A new booking is awaiting your quote. Sign in to respond.' ELSE 'התקבלה בקשה חדשה הממתינה להצעת מחיר. היכנסו למערכת כדי להגיב.' END)
+                      || CHR(10) || booking_pkg.g_app_url || '#b=' || p_id,
+            p_body_html => booking_pkg.booking_email_html(p_id, a.pref_lang));
         EXCEPTION WHEN OTHERS THEN NULL; END;
       END IF;
     END LOOP;

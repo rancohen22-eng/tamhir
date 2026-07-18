@@ -135,7 +135,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-18.6';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-18.7';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight
@@ -152,6 +152,8 @@ let VIEW = { tab:'bookings', lang:'he', bookingId:null, editing:false };
 let STMAP = {};     // status_code -> {he,en,terminal}
 let APMAP = {};     // iata -> {name_he,name_en}
 let UNREAD = 0;
+// deep-link מהמייל: /ords/arkia/api/app#b=123 → פתיחת ההזמנה לאחר התחברות
+let PENDING_BID = (function(){ const m=(location.hash||'').match(/b=(\d+)/); return m?Number(m[1]):null; })();
 
 const T = {
   he:{title:"הזמנת טיסות מטלטוס",logout:"יציאה",bookings:"הזמנות",newB:"הזמנה חדשה",notifications:"התראות",
@@ -238,6 +240,7 @@ async function doLogin(){
   APMAP={}; (boot.airports||[]).forEach(a=>APMAP[a.iata]={name_he:a.name_he,name_en:a.name_en});
   buildAirportList();
   VIEW.tab='bookings';
+  if(PENDING_BID){ VIEW.bookingId=PENDING_BID; PENDING_BID=null; try{history.replaceState(null,'',location.pathname);}catch(e){} }
   document.getElementById('lock').classList.add('hidden');
   document.getElementById('appwrap').classList.remove('hidden');
   applyLang(); await refreshUnread(); render();

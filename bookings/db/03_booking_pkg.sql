@@ -14,7 +14,12 @@
 
 CREATE OR REPLACE PACKAGE booking_pkg AS
 
-  g_mail_from CONSTANT VARCHAR2(200) := 'arkiapnr@gmail.com';  -- לשנות לכתובת השולח בפועל
+  g_mail_from  CONSTANT VARCHAR2(200) := 'arkiapnr@gmail.com';  -- לשנות לכתובת השולח בפועל
+  g_app_url    CONSTANT VARCHAR2(300) := 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/app';
+  g_assets_url CONSTANT VARCHAR2(300) := 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/assets/';
+
+  -- בונה גוף מייל HTML ממותג (ארקיע+טלטוס) עם פרטי ההזמנה וקישור "לחץ כאן"
+  FUNCTION booking_email_html (p_booking_id IN NUMBER, p_lang IN VARCHAR2) RETURN CLOB;
 
   -- ── אימות / סיסמאות ──
   FUNCTION  hash_password (p_salt IN VARCHAR2, p_plain IN VARCHAR2) RETURN VARCHAR2;
@@ -110,6 +115,76 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
   END derive_approver;
 
   --------------------------------------------------------------------------------
+  -- גוף מייל HTML ממותג עם פרטי ההזמנה + קישור "לחץ כאן"
+  --------------------------------------------------------------------------------
+  FUNCTION booking_email_html (p_booking_id IN NUMBER, p_lang IN VARCHAR2) RETURN CLOB IS
+    l_en   BOOLEAN := (UPPER(p_lang) = 'EN');
+    l_dir  VARCHAR2(3) := CASE WHEN l_en THEN 'ltr' ELSE 'rtl' END;
+    r      bookings%ROWTYPE;
+    l_dep  VARCHAR2(120); l_ini VARCHAR2(150); l_agn VARCHAR2(150); l_apr VARCHAR2(150);
+    l_st   VARCHAR2(80); l_wo VARCHAR2(80); l_link VARCHAR2(400); l_route VARCHAR2(60);
+    l_h    CLOB;
+    FUNCTION lbl (p_he VARCHAR2, p_en VARCHAR2) RETURN VARCHAR2 IS BEGIN RETURN CASE WHEN l_en THEN p_en ELSE p_he END; END;
+    FUNCTION row_html (p_label VARCHAR2, p_val VARCHAR2) RETURN VARCHAR2 IS BEGIN
+      IF p_val IS NULL THEN RETURN ''; END IF;
+      RETURN '<tr><td style="color:#5b6b7f;padding:5px 10px;white-space:nowrap;border-bottom:1px solid #eef2f7">'||p_label||
+             '</td><td style="padding:5px 10px;font-weight:600;border-bottom:1px solid #eef2f7">'||p_val||'</td></tr>';
+    END;
+  BEGIN
+    SELECT * INTO r FROM bookings WHERE booking_id = p_booking_id;
+    BEGIN SELECT CASE WHEN l_en THEN name_en ELSE name_he END INTO l_dep FROM departments WHERE dept_id = r.dept_id; EXCEPTION WHEN OTHERS THEN l_dep := NULL; END;
+    BEGIN SELECT full_name INTO l_ini FROM app_users WHERE user_id = r.initiator_id; EXCEPTION WHEN OTHERS THEN l_ini := NULL; END;
+    BEGIN SELECT agency_name INTO l_agn FROM agents WHERE agent_id = r.agent_id; EXCEPTION WHEN OTHERS THEN l_agn := NULL; END;
+    BEGIN SELECT full_name INTO l_apr FROM app_users WHERE user_id = r.approver_id; EXCEPTION WHEN OTHERS THEN l_apr := NULL; END;
+    BEGIN SELECT CASE WHEN l_en THEN label_en ELSE label_he END INTO l_st FROM statuses WHERE status_code = r.status; EXCEPTION WHEN OTHERS THEN l_st := r.status; END;
+    BEGIN SELECT CASE WHEN l_en THEN name_en ELSE name_he END INTO l_wo FROM wet_operators WHERE operator_id = r.wet_operator_id; EXCEPTION WHEN OTHERS THEN l_wo := NULL; END;
+    IF r.origin_iata IS NOT NULL OR r.dest_iata IS NOT NULL THEN
+      l_route := NVL(r.origin_iata,'?') || ' → ' || NVL(r.dest_iata,'?');
+    END IF;
+    l_link := g_app_url || '#b=' || p_booking_id;
+
+    l_h :=
+      '<div dir="'||l_dir||'" style="font-family:Heebo,Arial,sans-serif;background:#f2f5f9;padding:16px">'||
+      '<div style="max-width:580px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e2e8f0">'||
+      '<div style="background:#123a86;padding:14px 18px;text-align:center">'||
+        '<img src="'||g_assets_url||'arkia" alt="Arkia" height="26" style="vertical-align:middle;background:#fff;border-radius:6px;padding:3px 7px">'||
+        '<span style="color:#ffffff;margin:0 10px;font-size:14px">&#10005;</span>'||
+        '<img src="'||g_assets_url||'teltos" alt="Teltos" height="26" style="vertical-align:middle;background:#fff;border-radius:6px;padding:3px 7px">'||
+      '</div>'||
+      '<div style="padding:18px">'||
+        '<h2 style="color:#123a86;margin:0 0 8px;font-size:18px">'||lbl('הזמנת טיסות מטלטוס','Flight Booking by Teltos')||
+          ' &middot; '||lbl('הזמנה','Booking')||' #'||p_booking_id||'</h2>'||
+        '<span style="display:inline-block;background:#e8eff7;color:#123a86;border-radius:999px;padding:3px 12px;font-size:13px;font-weight:700">'||l_st||'</span>'||
+        '<table style="width:100%;border-collapse:collapse;margin-top:14px;font-size:14px">'||
+          row_html(lbl('מחלקה','Department'), l_dep)||
+          row_html(lbl('נתיב','Route'), l_route)||
+          row_html(lbl('מספר נוסעים','Passengers'), TO_CHAR(r.pax_count))||
+          row_html(lbl('תאריך יציאה','Departure'), TO_CHAR(r.departure_date,'DD/MM/YYYY'))||
+          row_html(lbl('שעה מועדפת','Preferred time'), r.pref_time)||
+          row_html(lbl('מפעיל רטוב','Wet operator'), l_wo)||
+          row_html(lbl('מזמין','Initiator'), l_ini)||
+          row_html(lbl('סוכן','Agent'), l_agn)||
+          row_html(lbl('מאשר','Approver'), l_apr)||
+          row_html(lbl('מחיר','Price'), CASE WHEN r.price IS NOT NULL THEN TO_CHAR(r.price)||' '||r.currency_code END)||
+          row_html('PNR', r.pnr)||
+          row_html(lbl('תאריך כרטוס','Ticketing date'), TO_CHAR(r.ticketing_date,'DD/MM/YYYY'))||
+          row_html(lbl('הערות','Notes'), r.quote_notes)||
+        '</table>'||
+        '<div style="text-align:center;margin-top:20px">'||
+          '<a href="'||l_link||'" style="display:inline-block;background:#0e7a4e;color:#fff;text-decoration:none;padding:12px 26px;border-radius:9px;font-weight:700;font-size:15px">'||
+          lbl('לחץ כאן לצפייה בהזמנה','Click here to view the booking')||'</a>'||
+        '</div>'||
+      '</div>'||
+      '<div style="background:#f7fafc;padding:10px 18px;color:#5b6b7f;font-size:11px;text-align:center">'||
+        lbl('הזמנת טיסות מטלטוס','Flight Booking by Teltos')||' &middot; '||lbl('ארקיע','Arkia')||'</div>'||
+      '</div></div>';
+    RETURN l_h;
+  EXCEPTION WHEN OTHERS THEN
+    RETURN '<div>'||lbl('הזמנה','Booking')||' #'||p_booking_id||' &middot; <a href="'||g_app_url||'#b='||p_booking_id||'">'||
+           lbl('לחץ כאן','Click here')||'</a></div>';
+  END booking_email_html;
+
+  --------------------------------------------------------------------------------
   -- שליחת התראה (פעמון + מייל) למשתמש בודד, בשפת ההעדפה שלו
   --------------------------------------------------------------------------------
   PROCEDURE push (
@@ -157,9 +232,8 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
           p_to        => l_email,
           p_from      => g_mail_from,
           p_subj      => l_subj,
-          p_body      => l_msg,
-          p_body_html => '<div dir="' || l_dir || '" style="font-family:Heebo,Arial,sans-serif">'
-                         || l_msg || '</div>');
+          p_body      => l_msg || CHR(10) || g_app_url || '#b=' || p_booking_id,
+          p_body_html => booking_email_html(p_booking_id, l_lang));
         BEGIN APEX_MAIL.PUSH_QUEUE; EXCEPTION WHEN OTHERS THEN NULL; END;
       EXCEPTION
         WHEN OTHERS THEN NULL;  -- מייל לא מוגדר/נכשל — הפעמון כבר נרשם
