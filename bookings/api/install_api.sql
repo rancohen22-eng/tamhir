@@ -757,4 +757,19 @@ EXCEPTION WHEN OTHERS THEN NULL;
 END;
 /
 
+--------------------------------------------------------------------------------
+-- רה-קומפילציה של אובייקטים שנפסלו ע"י מיגרציית הסכמה.
+-- ALTER TABLE bookings (הוספת עמודות) פוסל חבילות התלויות ב-bookings%ROWTYPE
+-- (כגון booking_pkg). ללא רה-קומפילציה מפורשת, בדיקת ה-VALID ב-CI תיכשל.
+--------------------------------------------------------------------------------
+BEGIN
+  FOR o IN (SELECT object_name FROM user_objects WHERE object_type='PACKAGE' AND status='INVALID') LOOP
+    BEGIN EXECUTE IMMEDIATE 'ALTER PACKAGE "'||o.object_name||'" COMPILE'; EXCEPTION WHEN OTHERS THEN NULL; END;
+  END LOOP;
+  FOR o IN (SELECT object_name FROM user_objects WHERE object_type='PACKAGE BODY' AND status='INVALID') LOOP
+    BEGIN EXECUTE IMMEDIATE 'ALTER PACKAGE "'||o.object_name||'" COMPILE BODY'; EXCEPTION WHEN OTHERS THEN NULL; END;
+  END LOOP;
+END;
+/
+
 PROMPT ✔ install_api.sql — שכבת ה-REST הותקנה. בסיס: /ords/arkia/api/
