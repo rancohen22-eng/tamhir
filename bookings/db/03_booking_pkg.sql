@@ -14,7 +14,7 @@
 
 CREATE OR REPLACE PACKAGE booking_pkg AS
 
-  g_mail_from CONSTANT VARCHAR2(200) := 'no-reply@arkia.example';  -- לשנות לכתובת השולח בפועל
+  g_mail_from CONSTANT VARCHAR2(200) := 'arkiapnr@gmail.com';  -- לשנות לכתובת השולח בפועל
 
   -- ── אימות / סיסמאות ──
   FUNCTION  hash_password (p_salt IN VARCHAR2, p_plain IN VARCHAR2) RETURN VARCHAR2;
@@ -144,9 +144,13 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
     INSERT INTO notifications (user_id, booking_id, notif_type, message)
     VALUES (p_user_id, p_booking_id, p_status, l_msg);
 
-    -- מייל (best-effort)
+    -- מייל (best-effort). עובד גם מהקשר ORDS (לא רק מתוך APEX):
+    -- קובעים security group של ה-Workspace לפני APEX_MAIL, ודוחפים את התור מיד.
     IF l_email IS NOT NULL THEN
       BEGIN
+        BEGIN
+          APEX_UTIL.SET_SECURITY_GROUP_ID(APEX_UTIL.FIND_SECURITY_GROUP_ID('ARKIA'));
+        EXCEPTION WHEN OTHERS THEN NULL; END;
         APEX_MAIL.SEND(
           p_to        => l_email,
           p_from      => g_mail_from,
@@ -154,6 +158,7 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
           p_body      => l_msg,
           p_body_html => '<div dir="' || l_dir || '" style="font-family:Heebo,Arial,sans-serif">'
                          || l_msg || '</div>');
+        BEGIN APEX_MAIL.PUSH_QUEUE; EXCEPTION WHEN OTHERS THEN NULL; END;
       EXCEPTION
         WHEN OTHERS THEN NULL;  -- מייל לא מוגדר/נכשל — הפעמון כבר נרשם
       END;
