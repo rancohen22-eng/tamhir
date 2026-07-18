@@ -1,0 +1,80 @@
+name: Deploy Arkia Bookings (API + UI) to Oracle
+
+# מתקין אוטומטית את שכבות ה-API וה-UI על Oracle ADB בכל שינוי רלוונטי.
+# בטוח להרצה חוזרת: מריץ רק install_api.sql + install_ui.sql — לא נוגע בסכמה/בנתונים.
+# (שינויי סכמה ב-bookings/db/** אינם מותקנים אוטומטית — ראו bookings/deploy/README.md.)
+
+on:
+  push:
+    branches:
+      - claude/flight-booking-documentation-0kbnbs
+      - main
+    paths:
+      - "bookings/api/**"
+      - "bookings/app/**"
+      - ".github/workflows/deploy-bookings.yml"
+  workflow_dispatch: {}   # מאפשר הרצה ידנית מה-Actions tab
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SECRETS: ${{ secrets.DB_WALLET_BASE64 != '' && secrets.DB_PASSWORD != '' }}
+    steps:
+      - name: Check secrets configured
+        run: |
+          if [ "${HAS_SECRETS}" != "true" ]; then
+            echo "::notice::הסודות עדיין לא הוגדרו (DB_WALLET_BASE64 / DB_PASSWORD) — מדלג על הפריסה. ראו bookings/deploy/README.md."
+          fi
+
+      - name: Checkout
+        if: ${{ env.HAS_SECRETS == 'true' }}
+        uses: actions/checkout@v4
+
+      - name: Set up Java (required by SQLcl)
+        if: ${{ env.HAS_SECRETS == 'true' }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Download SQLcl
+        if: ${{ env.HAS_SECRETS == 'true' }}
+        run: |
+          curl -fsSL -o sqlcl.zip https://download.oracle.com/otn_software/java/sqldeveloper/sqlcl-latest.zip
+          unzip -q sqlcl.zip
+          ./sqlcl/bin/sql -V
+
+      - name: Write wallet
+        if: ${{ env.HAS_SECRETS == 'true' }}
+        run: |
+          echo "${{ secrets.DB_WALLET_BASE64 }}" | base64 -d > wallet.zip
+          test -s wallet.zip || { echo "::error::DB_WALLET_BASE64 secret is empty"; exit 1; }
+
+      - name: Deploy API + UI
+        if: ${{ env.HAS_SECRETS == 'true' }}
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_USER: ${{ vars.DB_USER || 'ARKIA' }}
+          DB_CONN: ${{ vars.DB_CONN || 'arkiabkg_high' }}
+        run: |
+          set -euo pipefail
+          ./sqlcl/bin/sql -S /nolog <<SQLCL
+          set cloudconfig ${{ github.workspace }}/wallet.zip
+          whenever sqlerror exit 1
+          whenever oserror exit 1
+          connect ${DB_USER}/"${DB_PASSWORD}"@${DB_CONN}
+          set define off
+          set serveroutput on
+          prompt === Deploying install_api.sql ===
+          @bookings/api/install_api.sql
+          prompt === Deploying install_ui.sql ===
+          @bookings/api/install_ui.sql
+          prompt === Verifying api_pkg ===
+          select status from user_objects where object_name='API_PKG' and object_type='PACKAGE BODY';
+          exit
+          SQLCL
+
+      - name: Summary
+        if: ${{ success() && env.HAS_SECRETS == 'true' }}
+        run: echo "✅ Deployed. App URL → /ords/arkia/api/app"
