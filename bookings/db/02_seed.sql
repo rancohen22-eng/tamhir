@@ -1,6 +1,6 @@
 --------------------------------------------------------------------------------
 -- מערכת תיעוד הזמנות טיסות (ארקיע)
--- 02_seed.sql — נתוני יסוד (ייחוס + משתמשי דמו + סוכן טוסטוס)
+-- 02_seed.sql — נתוני יסוד (ייחוס + משתמשי דמו + סוכן טלטוס)
 --
 -- נטען אחרי 01_tables.sql. הסיסמאות למשתמשים נקבעות ב-03_booking_pkg.sql
 -- (בלוק שמריץ BOOKING_PKG.set_password לאחר קומפילציית החבילה).
@@ -106,9 +106,9 @@ VALUES ('approver_acmi', 'מאשר ACMI', 'approver.acmi@arkia.example',
 INSERT INTO app_users (username, full_name, email, dept_id, pref_lang)
 VALUES ('finance', 'משתמש כספים', 'finance@arkia.example', NULL, 'HE');
 
--- משתמש הסוכן (טוסטוס)
+-- משתמש הסוכן (טלטוס)
 INSERT INTO app_users (username, full_name, email, dept_id, pref_lang)
-VALUES ('toustous', 'טוסטוס - סוכן נסיעות', 'agent@toustous.example',
+VALUES ('teltos', 'טלטוס - סוכן נסיעות', 'agent@teltos.example',
         (SELECT dept_id FROM departments WHERE dept_code='AGENTS'), 'HE');
 
 -- ── תפקידים למשתמשים ──
@@ -116,7 +116,7 @@ INSERT INTO user_roles (user_id, role_code) SELECT user_id, 'ADMIN'     FROM app
 INSERT INTO user_roles (user_id, role_code) SELECT user_id, 'INITIATOR' FROM app_users WHERE username='initiator_acmi';
 INSERT INTO user_roles (user_id, role_code) SELECT user_id, 'APPROVER'  FROM app_users WHERE username='approver_acmi';
 INSERT INTO user_roles (user_id, role_code) SELECT user_id, 'FINANCE'   FROM app_users WHERE username='finance';
-INSERT INTO user_roles (user_id, role_code) SELECT user_id, 'AGENT'     FROM app_users WHERE username='toustous';
+INSERT INTO user_roles (user_id, role_code) SELECT user_id, 'AGENT'     FROM app_users WHERE username='teltos';
 
 -- ── גורם מאשר למחלקת ACMI ──
 INSERT INTO dept_approvers (dept_id, approver_user_id)
@@ -124,10 +124,10 @@ SELECT (SELECT dept_id FROM departments WHERE dept_code='ACMI'),
        (SELECT user_id FROM app_users WHERE username='approver_acmi')
 FROM dual;
 
--- ── סוכן טוסטוס (הלוגו נטען בנפרד — ראו BUILD_GUIDE / bookings/assets) ──
+-- ── סוכן טלטוס (הלוגו נטען בנפרד — ראו BUILD_GUIDE / bookings/assets) ──
 INSERT INTO agents (user_id, agency_name, contact_email, contact_phone)
-SELECT user_id, 'טוסטוס - מנועי חיפוש טיסות', 'agent@toustous.example', '000-0000000'
-FROM app_users WHERE username='toustous';
+SELECT user_id, 'טלטוס - מנועי חיפוש טיסות', 'agent@teltos.example', '000-0000000'
+FROM app_users WHERE username='teltos';
 
 COMMIT;
 

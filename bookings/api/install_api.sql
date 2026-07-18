@@ -394,4 +394,17 @@ BEGIN
 END;
 /
 
+
+--------------------------------------------------------------------------------
+-- מיתוג: ודא שם הסוכן הנכון (טלטוס) בנתונים החיים — idempotent, רץ בכל פריסה
+--------------------------------------------------------------------------------
+BEGIN
+  UPDATE app_users SET username='teltos', full_name='טלטוס - סוכן נסיעות' WHERE username='toustous';
+  UPDATE app_users SET full_name='טלטוס - סוכן נסיעות' WHERE username='teltos';
+  UPDATE agents SET agency_name='טלטוס - מנועי חיפוש טיסות' WHERE agency_name LIKE 'טוסטוס%' OR agency_name LIKE 'טלטוס%';
+  COMMIT;
+EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
 PROMPT ✔ install_api.sql — שכבת ה-REST הותקנה. בסיס: /ords/arkia/api/

@@ -90,21 +90,21 @@
 
 <div id="lock">
   <div class="panel">
-    <img class="wm" src="../assets/arkia-logo.svg" alt="Arkia" style="width:150px;max-width:60%;height:auto;display:block;margin:0 auto 8px" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'wm',textContent:'ARKIA'}))">
+    <img class="wm" src="/ords/arkia/api/assets/arkia" alt="Arkia" style="width:150px;max-width:60%;height:auto;display:block;margin:0 auto 8px" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'wm',textContent:'ARKIA'}))">
     <h1 id="lk_title">תיעוד הזמנות טיסות</h1>
     <p>מערכת פנימית · ארקיע</p>
     <input id="lk_user" class="fld" placeholder="שם משתמש" autocomplete="username" dir="ltr">
     <input id="lk_pw" class="fld" type="password" placeholder="סיסמה" autocomplete="current-password" dir="ltr">
     <button id="unlockBtn">כניסה</button>
     <div id="lockErr"></div>
-    <div class="demo"><b>דמו</b> (סיסמה <code>Arkia2026!</code>): admin · initiator_acmi · approver_acmi · finance · toustous</div>
+    <div class="demo"><b>דמו</b> (סיסמה <code>Arkia2026!</code>): admin · initiator_acmi · approver_acmi · finance · teltos</div>
   </div>
 </div>
 
 <div id="appwrap" class="hidden">
   <header class="app">
     <div class="row">
-      <span class="logobadge"><img src="../assets/arkia-logo.svg" alt="Arkia" onerror="this.parentNode.className='logotext';this.replaceWith('ARKIA')"></span>
+      <span class="logobadge"><img src="/ords/arkia/api/assets/arkia" alt="Arkia" onerror="this.parentNode.className='logotext';this.replaceWith('ARKIA')"></span>
       <h1 id="app_title">תיעוד הזמנות טיסות</h1>
       <span class="spacer"></span>
       <button class="hbtn" id="langBtn"></button>
@@ -291,9 +291,9 @@ async function renderDetail(app,id){
   const b=r.booking, files=r.files||[], log=r.log||[];
   const ag=BOOT.agents.find(a=>a.id===b.agent_id);
   const cobrand = b.agent_id?`<div class="cobrand">
-    <img src="../assets/arkia-logo.svg" alt="Arkia" onerror="this.replaceWith('ARKIA')">
+    <img src="/ords/arkia/api/assets/arkia" alt="Arkia" onerror="this.replaceWith('ARKIA')">
     <span class="x">✕</span>
-    <img src="../assets/toustous-logo.jpeg" alt="${esc(b.agent)}" onerror="this.style.display='none'">
+    <img src="/ords/arkia/api/assets/teltos" alt="${esc(b.agent)}" onerror="this.style.display='none'">
     <span class="muted" style="font-size:12px">${t('cobrandNote')}: <b>${esc(b.agent)}</b></span></div>`:'';
   const kpi=(l,v)=>`<div class="kpi"><div class="l">${l}</div><div class="n">${v}</div></div>`;
   app.innerHTML=`<div class="card">

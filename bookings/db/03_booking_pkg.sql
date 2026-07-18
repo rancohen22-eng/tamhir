@@ -288,7 +288,7 @@ BEGIN
   booking_pkg.set_password('initiator_acmi', 'Arkia2026!');
   booking_pkg.set_password('approver_acmi',  'Arkia2026!');
   booking_pkg.set_password('finance',        'Arkia2026!');
-  booking_pkg.set_password('toustous',       'Arkia2026!');
+  booking_pkg.set_password('teltos',       'Arkia2026!');
   COMMIT;
 END;
 /

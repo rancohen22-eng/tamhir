@@ -271,11 +271,11 @@ function seed(){
     usr("initiator_acmi","יוזם ACMI","initiator.acmi@arkia.example","ACMI",["INITIATOR"]),
     usr("approver_acmi","מאשר ACMI","approver.acmi@arkia.example","ACMI",["APPROVER"]),
     usr("finance","משתמש כספים","finance@arkia.example",null,["FINANCE"]),
-    usr("toustous","טוסטוס - סוכן נסיעות","agent@toustous.example","AGENTS",["AGENT"]),
+    usr("teltos","טלטוס - סוכן נסיעות","agent@teltos.example","AGENTS",["AGENT"]),
   ];
   const uByName=n=>users.find(u=>u.username===n).id;
-  const agents=[{id:uid(),user_id:uByName("toustous"),agency_name:"טוסטוס - מנועי חיפוש טיסות",
-    logo:"assets/toustous-logo.jpeg"}];
+  const agents=[{id:uid(),user_id:uByName("teltos"),agency_name:"טלטוס - מנועי חיפוש טיסות",
+    logo:"assets/teltos-logo.jpeg"}];
   const approvers=[{dept_id:dById("ACMI"),user_id:uByName("approver_acmi")}];
   const currencies=[
     {code:"USD",name_he:"דולר אמריקאי",name_en:"US Dollar",symbol:"$",is_default:true},
@@ -338,7 +338,7 @@ function renderLock(){
   document.getElementById("lk_title").textContent=t("title");
   document.getElementById("lk_demo").innerHTML =
     '<b>משתמשי דמו</b> (סיסמה <code>Arkia2026!</code>):<br>'+
-    'admin · initiator_acmi · approver_acmi · finance · toustous';
+    'admin · initiator_acmi · approver_acmi · finance · teltos';
 }
 function doLogin(){
   const un=document.getElementById("lk_user").value.trim().toLowerCase();
