@@ -100,6 +100,10 @@
     <button id="unlockBtn">כניסה</button>
     <div id="lockErr"></div>
     <div class="demo"><b>דמו</b> (סיסמה <code>Arkia2026!</code>): admin · initiator_acmi · approver_acmi · finance · teltos</div>
+    <div style="margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:11px;color:var(--muted)">
+      <span>בשיתוף</span>
+      <img src="/ords/arkia/api/assets/teltos" alt="Teltos" style="height:20px;vertical-align:middle" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'טלטוס',style:'color:var(--brand)'}))">
+    </div>
   </div>
 </div>
 
@@ -130,6 +134,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
+const BUILD = '2026-07-18.4';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight
@@ -169,7 +174,8 @@ const T = {
     columns:"עמודות לייצוא",reportTemplate:"תבנית דוח",saveTemplate:"שמור תבנית",templateName:"שם התבנית",
     loadTemplate:"טען תבנית",del:"מחק",wetOperators:"מפעילים רטובים",addWetOp:"הוסף מפעיל",all:"הכל",
     lastUpdate:"עדכון אחרון",avgPax:"ממוצע נוסעים",byStatus:"לפי סטטוס",
-    airports:"שדות תעופה",country:"מדינה",addAirport:"הוסף/עדכן שדה תעופה",activate:"הפעל",deactivate:"השבת"},
+    airports:"שדות תעופה",country:"מדינה",addAirport:"הוסף/עדכן שדה תעופה",activate:"הפעל",deactivate:"השבת",
+    resetEmailed:"נשלח מייל עם סיסמה זמנית למשתמש:"},
   en:{title:"Flight Booking Documentation",logout:"Logout",bookings:"Bookings",newB:"New Booking",notifications:"Notifications",
     dept:"Department",status:"Status",initiator:"Initiator",agent:"Agent",approver:"Approver",openDate:"Open Date",
     departure:"Departure",ticketingDate:"Ticketing Date",price:"Price",currency:"Currency",pnr:"PNR",uref:"Unique Ref",
@@ -191,7 +197,8 @@ const T = {
     columns:"Export columns",reportTemplate:"Report template",saveTemplate:"Save template",templateName:"Template name",
     loadTemplate:"Load template",del:"Delete",wetOperators:"Wet operators",addWetOp:"Add operator",all:"All",
     lastUpdate:"Last update",avgPax:"Avg passengers",byStatus:"By status",
-    airports:"Airports",country:"Country",addAirport:"Add/update airport",activate:"Activate",deactivate:"Deactivate"}
+    airports:"Airports",country:"Country",addAirport:"Add/update airport",activate:"Activate",deactivate:"Deactivate",
+    resetEmailed:"A temporary password was emailed to the user:"}
 };
 function t(k){ return (T[VIEW.lang]||T.he)[k]||k; }
 function stLabel(code){ const s=STMAP[code]; return s?(VIEW.lang==='en'?s.en:s.he):code; }
@@ -266,7 +273,7 @@ function render(){
   const nav=document.getElementById('tabs'); nav.innerHTML='';
   tabsFor().forEach(([k,lbl])=>{ const b=document.createElement('button'); b.textContent=lbl;
     b.className=VIEW.tab===k?'sel':''; b.onclick=()=>{VIEW.tab=k;VIEW.bookingId=null;VIEW.editing=false;render();}; nav.appendChild(b); });
-  document.getElementById('foot').textContent=VIEW.lang==='en'?'Internal use · Arkia · live on Oracle · CI/CD ✓':'לשימוש פנימי · ארקיע · מחובר לאורקל · פריסה אוטומטית ✓';
+  document.getElementById('foot').textContent=(VIEW.lang==='en'?'Internal use · Arkia · live on Oracle · CI/CD ✓':'לשימוש פנימי · ארקיע · מחובר לאורקל · פריסה אוטומטית ✓')+' · build '+BUILD;
   const app=document.getElementById('app');
   if(VIEW.tab==='notifications') return renderNotifications(app);
   if(VIEW.bookingId) return renderDetail(app,VIEW.bookingId);
@@ -460,7 +467,8 @@ async function resetPw(id,username){
   if(!confirm(t('resetPw')+' · '+username+'?')) return;
   spin(true); const r=await api('admin/resetpw',{token:SES.token,user_id:id}); spin(false);
   if(!r.ok){ alert(r.error); return; }
-  alert(t('tempPwTitle')+'\n\n'+t('tempPwMsg')+'\n\n'+username+' : '+r.temp_password);
+  if(r.emailed){ alert(t('resetEmailed')+'\n'+(r.email||username)); }
+  else { alert(t('tempPwTitle')+'\n\n'+t('tempPwMsg')+'\n\n'+username+' : '+r.temp_password); }
 }
 async function addWetOp(){
   const he=document.getElementById('wo_he').value.trim(), en=document.getElementById('wo_en').value.trim();

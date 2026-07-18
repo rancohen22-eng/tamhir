@@ -586,20 +586,52 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
   EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
   END admin_setpw;
 
-  -- איפוס סיסמה: מייצר סיסמה זמנית אקראית, קובע אותה, ומחזיר אותה פעם אחת בלבד.
+  -- איפוס סיסמה: מייצר סיסמה זמנית אקראית, קובע אותה, ו**שולח אותה במייל** למשתמש.
   -- (סיסמאות נשמרות כ-hash חד-כיווני ולכן לא ניתן להציג סיסמה קיימת — רק לאפס.)
-  -- כשיופעל שירות המייל, אפשר יהיה לשלוח קישור איפוס במקום להציג את הסיסמה הזמנית.
+  -- אם שליחת המייל נכשלה / אין למשתמש מייל — הסיסמה הזמנית מוחזרת להצגה חד-פעמית.
   FUNCTION admin_reset_pw (p_token VARCHAR2, p_user_id NUMBER) RETURN CLOB IS
     l_uid NUMBER := admin_guard(p_token);
     l_username app_users.username%TYPE;
+    l_email    app_users.email%TYPE;
+    l_lang     app_users.pref_lang%TYPE;
     l_temp     VARCHAR2(20);
+    l_subj     VARCHAR2(200);
+    l_body     VARCHAR2(1000);
   BEGIN
-    SELECT username INTO l_username FROM app_users WHERE user_id = p_user_id;
-    -- סיסמה זמנית: 3 אותיות + 5 ספרות (קריאה, חד-פעמית)
+    SELECT username, email, pref_lang INTO l_username, l_email, l_lang
+      FROM app_users WHERE user_id = p_user_id;
+    -- סיסמה זמנית: 2 אותיות + 4 תווים + 4 ספרות (קריאה, חד-פעמית)
     l_temp := 'Ar' || SUBSTR(RAWTOHEX(SYS_GUID()),1,4) || TRUNC(DBMS_RANDOM.VALUE(1000,9999));
     booking_pkg.set_password(l_username, l_temp);
     COMMIT;
-    RETURN '{"ok":true,"username":"'||l_username||'","temp_password":"'||l_temp||'"}';
+
+    -- שליחת המייל (best-effort). g_mail_from = ה-Approved Sender המאושר.
+    IF l_email IS NOT NULL THEN
+      IF l_lang = 'EN' THEN
+        l_subj := 'Arkia Bookings — password reset';
+        l_body := 'Your password was reset by an administrator.' || CHR(10) ||
+                  'Username: ' || l_username || CHR(10) ||
+                  'Temporary password: ' || l_temp || CHR(10) ||
+                  'Please sign in and change it.';
+      ELSE
+        l_subj := 'מערכת הזמנות ארקיע — איפוס סיסמה';
+        l_body := 'הסיסמה שלך אופסה על ידי מנהל המערכת.' || CHR(10) ||
+                  'שם משתמש: ' || l_username || CHR(10) ||
+                  'סיסמה זמנית: ' || l_temp || CHR(10) ||
+                  'יש להתחבר ולהחליף אותה.';
+      END IF;
+      BEGIN
+        BEGIN APEX_UTIL.SET_SECURITY_GROUP_ID(APEX_UTIL.FIND_SECURITY_GROUP_ID('ARKIA')); EXCEPTION WHEN OTHERS THEN NULL; END;
+        APEX_MAIL.SEND(p_to => l_email, p_from => booking_pkg.g_mail_from, p_subj => l_subj, p_body => l_body);
+        BEGIN APEX_MAIL.PUSH_QUEUE; EXCEPTION WHEN OTHERS THEN NULL; END;
+        RETURN '{"ok":true,"emailed":true,"username":"'||l_username||'","email":"'||l_email||'"}';
+      EXCEPTION WHEN OTHERS THEN
+        -- מייל נכשל — נחזיר את הסיסמה הזמנית למסירה ידנית
+        RETURN '{"ok":true,"emailed":false,"username":"'||l_username||'","temp_password":"'||l_temp||'"}';
+      END;
+    END IF;
+    -- אין מייל למשתמש
+    RETURN '{"ok":true,"emailed":false,"username":"'||l_username||'","temp_password":"'||l_temp||'"}';
   EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
   END admin_reset_pw;
 
