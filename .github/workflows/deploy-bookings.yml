@@ -1,8 +1,9 @@
 name: Deploy Arkia Bookings (API + UI) to Oracle
 
 # מתקין אוטומטית את שכבות ה-API וה-UI על Oracle ADB בכל שינוי רלוונטי.
-# בטוח להרצה חוזרת: מריץ רק install_api.sql + install_ui.sql — לא נוגע בסכמה/בנתונים.
-# (שינויי סכמה ב-bookings/db/** אינם מותקנים אוטומטית — ראו bookings/deploy/README.md.)
+# בטוח להרצה חוזרת: מריץ install_api.sql + install_ui.sql (idempotent).
+# install_api.sql כולל מיגרציית סכמה בטוחה (הוספת עמודות/טבלאות בלבד) — לא מוחק נתונים.
+# (התקנה ראשונית מלאה של הסכמה עדיין דרך bookings/db/** — ראו bookings/deploy/README.md.)
 
 on:
   push:

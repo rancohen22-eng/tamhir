@@ -80,6 +80,8 @@
   .muted{color:var(--muted)}
   .rowflex{display:flex;gap:14px;flex-wrap:wrap}.rowflex>div{flex:1;min-width:170px}
   .pill{display:inline-block;background:var(--chip);color:var(--brand);border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600}
+  .cols{display:flex;flex-wrap:wrap;gap:6px 16px;margin:6px 0}
+  .cols label{font-size:12.5px;display:flex;align-items:center;gap:5px;cursor:pointer}
   footer{max-width:1080px;margin:0 auto;padding:8px 14px 26px;font-size:11.5px;color:var(--muted)}
   #spin{position:fixed;inset:0;background:rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;z-index:50}
   #spin div{width:34px;height:34px;border:4px solid var(--chip);border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite}
@@ -118,6 +120,7 @@
   <footer id="foot"></footer>
 </div>
 <div id="spin" class="hidden"><div></div></div>
+<datalist id="airportsList"></datalist>
 
 <script>
 "use strict";
@@ -138,9 +141,10 @@ function spin(on){ document.getElementById('spin').classList.toggle('hidden', !o
 
 /* ── מצב ── */
 let SES = null;     // {token,user,roles,agent_id}
-let BOOT = null;    // {departments,agents,currencies,statuses}
-let VIEW = { tab:'bookings', lang:'he', bookingId:null };
+let BOOT = null;    // {departments,agents,currencies,statuses,wet_operators,airports}
+let VIEW = { tab:'bookings', lang:'he', bookingId:null, editing:false };
 let STMAP = {};     // status_code -> {he,en,terminal}
+let APMAP = {};     // iata -> {name_he,name_en}
 let UNREAD = 0;
 
 const T = {
@@ -155,7 +159,16 @@ const T = {
     download:"הורדה",view:"צפייה",cobrandNote:"בשיתוף",search:"חיפוש...",required2:"נא למלא שדות חובה",
     finance:"כספים",total:"סה\"כ הזמנות",open:"פתוחות",ticketed:"כורטסו",cancelled:"בוטלו",exportExcel:"ייצוא Excel (CSV)",
     admin:"ניהול",departments:"מחלקות",users:"משתמשים",agents:"סוכנים",currencies:"מטבעות",roles:"תפקידים",
-    name:"שם",code:"קוד",email:"אימייל",add:"הוסף",changePw:"שנה סיסמה",saved:"נשמר",role:"תפקיד"},
+    name:"שם",code:"קוד",email:"אימייל",add:"הוסף",changePw:"שנה סיסמה",saved:"נשמר",role:"תפקיד",symbol:"סמל",
+    pax:"מס' נוסעים",prefTime:"שעה מועדפת",route:"נתיב",origin:"מוצא",dest:"יעד",wetOp:"מפעיל רטוב",
+    updatedBy:"עודכן ע\"י",edit:"עריכה",save:"שמור",editBooking:"עריכת הזמנה",optional:"(רשות)",
+    active:"פעיל",inactive:"לא פעיל",editUser:"עריכת משתמש",resetPw:"איפוס סיסמה",
+    tempPwTitle:"סיסמה זמנית נוצרה",tempPwMsg:"מסרו למשתמש את הסיסמה הזמנית. תוצג פעם אחת בלבד:",
+    pwSecNote:"סיסמאות נשמרות כ-hash חד-כיווני ולכן לא ניתן להציגן. איפוס יוצר סיסמה זמנית (וכשיופעל המייל — קישור איפוס).",
+    dashboard:"סיכום",filters:"סינון",fromDate:"מתאריך",toDate:"עד תאריך",applyFilters:"החל סינון",clearFilters:"נקה",
+    columns:"עמודות לייצוא",reportTemplate:"תבנית דוח",saveTemplate:"שמור תבנית",templateName:"שם התבנית",
+    loadTemplate:"טען תבנית",del:"מחק",wetOperators:"מפעילים רטובים",addWetOp:"הוסף מפעיל",all:"הכל",
+    lastUpdate:"עדכון אחרון",avgPax:"ממוצע נוסעים",byStatus:"לפי סטטוס"},
   en:{title:"Flight Booking Documentation",logout:"Logout",bookings:"Bookings",newB:"New Booking",notifications:"Notifications",
     dept:"Department",status:"Status",initiator:"Initiator",agent:"Agent",approver:"Approver",openDate:"Open Date",
     departure:"Departure",ticketingDate:"Ticketing Date",price:"Price",currency:"Currency",pnr:"PNR",uref:"Unique Ref",
@@ -167,7 +180,16 @@ const T = {
     download:"Download",view:"View",cobrandNote:"With",search:"Search...",required2:"Please fill required fields",
     finance:"Finance",total:"Total bookings",open:"Open",ticketed:"Ticketed",cancelled:"Cancelled",exportExcel:"Export Excel (CSV)",
     admin:"Admin",departments:"Departments",users:"Users",agents:"Agents",currencies:"Currencies",roles:"Roles",
-    name:"Name",code:"Code",email:"Email",add:"Add",changePw:"Change password",saved:"Saved",role:"Role"}
+    name:"Name",code:"Code",email:"Email",add:"Add",changePw:"Change password",saved:"Saved",role:"Role",symbol:"Symbol",
+    pax:"Passengers",prefTime:"Preferred time",route:"Route",origin:"From",dest:"To",wetOp:"Wet operator",
+    updatedBy:"Updated by",edit:"Edit",save:"Save",editBooking:"Edit booking",optional:"(optional)",
+    active:"Active",inactive:"Inactive",editUser:"Edit user",resetPw:"Reset password",
+    tempPwTitle:"Temporary password created",tempPwMsg:"Give the user this temporary password. Shown once only:",
+    pwSecNote:"Passwords are stored as a one-way hash and cannot be displayed. Reset creates a temporary password (and once email is enabled — a reset link).",
+    dashboard:"Overview",filters:"Filters",fromDate:"From date",toDate:"To date",applyFilters:"Apply",clearFilters:"Clear",
+    columns:"Export columns",reportTemplate:"Report template",saveTemplate:"Save template",templateName:"Template name",
+    loadTemplate:"Load template",del:"Delete",wetOperators:"Wet operators",addWetOp:"Add operator",all:"All",
+    lastUpdate:"Last update",avgPax:"Avg passengers",byStatus:"By status"}
 };
 function t(k){ return (T[VIEW.lang]||T.he)[k]||k; }
 function stLabel(code){ const s=STMAP[code]; return s?(VIEW.lang==='en'?s.en:s.he):code; }
@@ -176,6 +198,9 @@ function hasRole(r){ return SES && SES.roles && SES.roles.indexOf(r)>=0; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 function curSym(code){ const c=(BOOT.currencies||[]).find(x=>x.code===code); return c?c.symbol:''; }
 function deptName(d){ return VIEW.lang==='en'?(d.name_en||d.name_he):d.name_he; }
+function apLabel(iata){ if(!iata) return ''; const a=APMAP[iata]; return a?(iata+' · '+(VIEW.lang==='en'?a.name_en:a.name_he)):iata; }
+function routeLabel(b){ if(!b.origin&&!b.dest) return t('none'); return (b.origin||'?')+' → '+(b.dest||'?'); }
+function isACMI(deptId){ const d=(BOOT.departments||[]).find(x=>x.id===deptId); return d&&d.code==='ACMI'; }
 
 /* ── התחברות ── */
 async function doLogin(){
@@ -193,7 +218,9 @@ async function doLogin(){
   spin(false);
   if(!boot.ok){ alert('bootstrap error: '+boot.error); return; }
   BOOT=boot; STMAP={}; (boot.statuses||[]).forEach(s=>STMAP[s.code]={he:s.he,en:s.en,terminal:s.terminal});
-  VIEW.tab = hasRole('AGENT')?'bookings':'bookings';
+  APMAP={}; (boot.airports||[]).forEach(a=>APMAP[a.iata]={name_he:a.name_he,name_en:a.name_en});
+  buildAirportList();
+  VIEW.tab='bookings';
   document.getElementById('lock').classList.add('hidden');
   document.getElementById('appwrap').classList.remove('hidden');
   applyLang(); await refreshUnread(); render();
@@ -201,6 +228,11 @@ async function doLogin(){
 function logout(){ SES=null; document.getElementById('appwrap').classList.add('hidden');
   document.getElementById('lock').classList.remove('hidden');
   document.getElementById('lk_user').value=''; document.getElementById('lk_pw').value=''; document.getElementById('lockErr').textContent=''; }
+
+function buildAirportList(){
+  const dl=document.getElementById('airportsList');
+  dl.innerHTML=(BOOT.airports||[]).map(a=>`<option value="${a.iata}">${esc(a.iata+' · '+(VIEW.lang==='en'?a.name_en:a.name_he))}</option>`).join('');
+}
 
 /* ── שפה ── */
 function applyLang(){
@@ -210,12 +242,13 @@ function applyLang(){
   document.getElementById('langBtn').textContent=VIEW.lang==='en'?'🇮🇱 עברית':'🇺🇸 English';
   document.getElementById('logoutBtn').textContent=t('logout');
 }
-function toggleLang(){ VIEW.lang=VIEW.lang==='en'?'he':'en'; applyLang(); render(); }
+function toggleLang(){ VIEW.lang=VIEW.lang==='en'?'he':'en'; buildAirportList(); applyLang(); render(); }
 
 /* ── ניווט ── */
+function canInitiate(){ return hasRole('INITIATOR')||hasRole('APPROVER'); }
 function tabsFor(){
   const tabs=[['bookings',t('bookings')]];
-  if(hasRole('INITIATOR')) tabs.push(['new',t('newB')]);
+  if(canInitiate()) tabs.push(['new',t('newB')]);
   if(hasRole('FINANCE')||hasRole('ADMIN')) tabs.push(['finance',t('finance')]);
   if(hasRole('ADMIN')) tabs.push(['admin',t('admin')]);
   return tabs;
@@ -230,7 +263,7 @@ function render(){
   const bc=document.getElementById('bellCount'); bc.textContent=UNREAD; bc.classList.toggle('hidden',UNREAD===0);
   const nav=document.getElementById('tabs'); nav.innerHTML='';
   tabsFor().forEach(([k,lbl])=>{ const b=document.createElement('button'); b.textContent=lbl;
-    b.className=VIEW.tab===k?'sel':''; b.onclick=()=>{VIEW.tab=k;VIEW.bookingId=null;render();}; nav.appendChild(b); });
+    b.className=VIEW.tab===k?'sel':''; b.onclick=()=>{VIEW.tab=k;VIEW.bookingId=null;VIEW.editing=false;render();}; nav.appendChild(b); });
   document.getElementById('foot').textContent=VIEW.lang==='en'?'Internal use · Arkia · live on Oracle · CI/CD ✓':'לשימוש פנימי · ארקיע · מחובר לאורקל · פריסה אוטומטית ✓';
   const app=document.getElementById('app');
   if(VIEW.tab==='notifications') return renderNotifications(app);
@@ -241,35 +274,51 @@ function render(){
   return renderBookings(app);
 }
 
-/* ── רשימת הזמנות ── */
+/* ── רשימת הזמנות (עם דשבורד) ── */
 async function renderBookings(app){
   app.innerHTML=`<div class="card"><h2>${t('bookings')}</h2><div class="muted">…</div></div>`;
   const r=await api('bookings',{token:SES.token});
   if(!r.ok) return app.innerHTML=`<div class="card"><h2>${t('bookings')}</h2><div class="muted" style="color:var(--danger)">${esc(r.error)}</div></div>`;
   const list=r.bookings||[];
-  app.innerHTML=`<div class="card"><h2>${t('bookings')}</h2>
+  const openN=list.filter(b=>!stTerminal(b.status)).length;
+  const tkN=list.filter(b=>b.status==='TICKETED').length;
+  const awQ=list.filter(b=>b.status==='AWAITING_QUOTE'||b.status==='QUOTE_RECEIVED').length;
+  const cnN=list.filter(b=>b.status==='CANCELLED'||b.status==='CANCEL_REQUESTED').length;
+  app.innerHTML=`<div class="card"><h2>${t('dashboard')}</h2>
+    <div class="grid">
+      <div class="kpi"><div class="l">${t('total')}</div><div class="n">${list.length}</div></div>
+      <div class="kpi"><div class="l">${t('open')}</div><div class="n">${openN}</div></div>
+      <div class="kpi"><div class="l">${t('status')}: ${t('submitQuote')}</div><div class="n">${awQ}</div></div>
+      <div class="kpi"><div class="l">${t('ticketed')}</div><div class="n">${tkN}</div></div>
+      <div class="kpi"><div class="l">${t('cancelled')}</div><div class="n">${cnN}</div></div>
+    </div></div>
+  <div class="card"><h2>${t('bookings')}</h2>
     <input id="bkSearch" class="fld" placeholder="${t('search')}" oninput="filterBk()">
     <div class="tablewrap" style="margin-top:10px"><table id="bkTable"><thead><tr>
-      <th>#</th><th>${t('status')}</th><th>${t('dept')}</th><th>${t('initiator')}</th><th>${t('agent')}</th>
-      <th>${t('departure')}</th><th>${t('price')}</th><th>${t('pnr')}</th></tr></thead><tbody>${
+      <th>#</th><th>${t('status')}</th><th>${t('dept')}</th><th>${t('route')}</th><th>${t('pax')}</th>
+      <th>${t('initiator')}</th><th>${t('agent')}</th><th>${t('departure')}</th><th>${t('price')}</th>
+      <th>${t('pnr')}</th><th>${t('updatedBy')}</th></tr></thead><tbody>${
       list.map(b=>`<tr onclick="openBk(${b.id})">
         <td>${b.seq}</td><td><span class="badge st-${b.status}">${stLabel(b.status)}</span></td>
-        <td>${esc(VIEW.lang==='en'?b.dept_en:b.dept_he)}</td><td>${esc(b.initiator)}</td>
-        <td>${esc(b.agent||t('none'))}</td><td>${b.departure_date||t('none')}</td>
+        <td>${esc(VIEW.lang==='en'?b.dept_en:b.dept_he)}</td><td>${esc(routeLabel(b))}</td><td>${b.pax||1}</td>
+        <td>${esc(b.initiator)}</td><td>${esc(b.agent||t('none'))}</td><td>${b.departure_date||t('none')}</td>
         <td>${b.price!=null?curSym(b.currency)+Number(b.price).toLocaleString():t('none')}</td>
-        <td>${esc(b.pnr||t('none'))}</td></tr>`).join('')||`<tr><td colspan="8" class="muted">${t('noBookings')}</td></tr>`}
+        <td>${esc(b.pnr||t('none'))}</td>
+        <td>${esc(b.updated_by||t('none'))}<br><span class="muted" style="font-size:11px">${b.updated_at||''}</span></td></tr>`).join('')||`<tr><td colspan="11" class="muted">${t('noBookings')}</td></tr>`}
     </tbody></table></div></div>`;
 }
 function filterBk(){ const q=document.getElementById('bkSearch').value.toLowerCase();
   document.querySelectorAll('#bkTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
-function openBk(id){ VIEW.bookingId=id; render(); }
+function openBk(id){ VIEW.bookingId=id; VIEW.editing=false; render(); }
 
 /* ── ניהול (ADMIN) ── */
 const ROLES=['INITIATOR','APPROVER','AGENT','FINANCE','ADMIN'];
+let ADMIN_USERS=[];
 async function renderAdmin(app){
   app.innerHTML=`<div class="card"><h2>${t('admin')}</h2><div class="muted">…</div></div>`;
   const ur=await api('admin/users',{token:SES.token});
-  const users=ur.ok?(ur.users||[]):[];
+  ADMIN_USERS=ur.ok?(ur.users||[]):[];
+  const users=ADMIN_USERS;
   const deptOpts=BOOT.departments.map(d=>`<option value="${d.id}">${esc(deptName(d))}</option>`).join('');
   const roleOpts=ROLES.map(r=>`<option value="${r}">${r}</option>`).join('');
   app.innerHTML=`
@@ -284,10 +333,15 @@ async function renderAdmin(app){
     </div><div id="ad_err" style="color:var(--danger);font-size:13px"></div>
   </div>
   <div class="card"><h2>${t('users')}</h2>
-    <div class="tablewrap"><table><thead><tr><th>username</th><th>${t('name')}</th><th>${t('dept')}</th><th>${t('roles')}</th><th></th></tr></thead>
-    <tbody>${users.map(u=>`<tr><td>${esc(u.username)}</td><td>${esc(u.full_name)}</td><td>${esc(u.dept||t('none'))}</td>
+    <div class="tablewrap"><table><thead><tr><th>username</th><th>${t('name')}</th><th>${t('email')}</th><th>${t('dept')}</th><th>${t('roles')}</th><th></th></tr></thead>
+    <tbody>${users.map((u,i)=>`<tr><td>${esc(u.username)}</td><td>${esc(u.full_name)}</td><td dir="ltr">${esc(u.email||t('none'))}</td><td>${esc(u.dept||t('none'))}</td>
       <td>${(u.roles||'').split(',').filter(x=>x).map(r=>`<span class="pill">${r}</span>`).join(' ')}</td>
-      <td><button class="btn ghost sm" onclick="changePw('${esc(u.username)}')">${t('changePw')}</button></td></tr>`).join('')}</tbody></table></div>
+      <td><div class="btnrow" style="margin:0">
+        <button class="btn ghost sm" onclick="editUser(${i})">${t('edit')}</button>
+        <button class="btn ghost sm" onclick="resetPw(${u.id},'${esc(u.username)}')">${t('resetPw')}</button>
+      </div></td></tr>`).join('')}</tbody></table></div>
+    <div id="edit_user_box"></div>
+    <p class="muted" style="font-size:12px;margin-top:8px">${t('pwSecNote')}</p>
     <h3>${t('add')} · ${t('users')}</h3>
     <div class="rowflex">
       <div><input id="au_un" class="fld" placeholder="username" dir="ltr"></div>
@@ -301,12 +355,22 @@ async function renderAdmin(app){
       <div style="flex:0"><button class="btn sm" onclick="addUser()">${t('add')}</button></div>
     </div><div id="au_err" style="color:var(--danger);font-size:13px"></div>
   </div>
+  <div class="card"><h2>${t('wetOperators')} <span class="muted" style="font-size:12px">(ACMI)</span></h2>
+    <div class="tablewrap"><table><thead><tr><th>${t('name')} (HE)</th><th>Name (EN)</th></tr></thead>
+    <tbody>${(BOOT.wet_operators||[]).map(w=>`<tr><td>${esc(w.name_he)}</td><td dir="ltr">${esc(w.name_en)}</td></tr>`).join('')||`<tr><td colspan="2" class="muted">${t('none')}</td></tr>`}</tbody></table></div>
+    <div class="rowflex" style="margin-top:8px">
+      <div><input id="wo_he" class="fld" placeholder="שם (עברית)"></div>
+      <div><input id="wo_en" class="fld" placeholder="Name (English)" dir="ltr"></div>
+      <div style="flex:0"><button class="btn sm" onclick="addWetOp()">${t('addWetOp')}</button></div>
+    </div><div id="wo_err" style="color:var(--danger);font-size:13px"></div>
+  </div>
   <div class="card"><h2>${t('currencies')}</h2>
-    <div class="tablewrap"><table><thead><tr><th>${t('code')}</th><th>${t('symbol')||'symbol'}</th></tr></thead>
+    <div class="tablewrap"><table><thead><tr><th>${t('code')}</th><th>${t('symbol')}</th></tr></thead>
     <tbody>${BOOT.currencies.map(c=>`<tr><td>${c.code}</td><td>${c.symbol}</td></tr>`).join('')}</tbody></table></div>
   </div>`;
 }
-async function refreshBoot(){ const b=await api('bootstrap',{token:SES.token}); if(b.ok){ BOOT=b; STMAP={}; (b.statuses||[]).forEach(s=>STMAP[s.code]={he:s.he,en:s.en,terminal:s.terminal}); } }
+async function refreshBoot(){ const b=await api('bootstrap',{token:SES.token}); if(b.ok){ BOOT=b; STMAP={}; (b.statuses||[]).forEach(s=>STMAP[s.code]={he:s.he,en:s.en,terminal:s.terminal});
+  APMAP={}; (b.airports||[]).forEach(a=>APMAP[a.iata]={name_he:a.name_he,name_en:a.name_en}); buildAirportList(); } }
 async function addDept(){
   const code=document.getElementById('ad_code').value.trim(), he=document.getElementById('ad_he').value.trim(), en=document.getElementById('ad_en').value.trim();
   if(!code||!he){ document.getElementById('ad_err').textContent=t('required2'); return; }
@@ -322,64 +386,184 @@ async function addUser(){
   await refreshBoot(); spin(false);
   if(!r.ok){ document.getElementById('au_err').textContent=r.error; return; } render();
 }
-async function changePw(username){
-  const p=prompt(t('changePw')+' · '+username+':'); if(!p) return;
-  spin(true); const r=await api('admin/setpw',{token:SES.token,username:username,password:p}); spin(false);
-  alert(r.ok?t('saved'):r.error);
+function editUser(i){
+  const u=ADMIN_USERS[i];
+  const deptOpts=BOOT.departments.map(d=>`<option value="${d.id}" ${d.id===u.dept_id?'selected':''}>${esc(deptName(d))}</option>`).join('');
+  document.getElementById('edit_user_box').innerHTML=`<div class="card" style="background:#f7fafc;margin-top:10px">
+    <h3>${t('editUser')}: ${esc(u.username)}</h3>
+    <div class="rowflex">
+      <div><label class="f">${t('name')}</label><input id="eu_fn" class="fld" value="${esc(u.full_name)}"></div>
+      <div><label class="f">${t('email')}</label><input id="eu_em" class="fld" dir="ltr" value="${esc(u.email||'')}"></div>
+    </div>
+    <div class="rowflex">
+      <div><label class="f">${t('dept')}</label><select id="eu_dept" class="fld"><option value="">${t('none')}</option>${deptOpts}</select></div>
+      <div><label class="f">${t('status')}</label><select id="eu_act" class="fld"><option value="Y">${t('active')}</option><option value="N">${t('inactive')}</option></select></div>
+    </div>
+    <div class="btnrow"><button class="btn ok" onclick="saveUser(${u.id})">${t('save')}</button>
+      <button class="btn ghost" onclick="document.getElementById('edit_user_box').innerHTML=''">${t('back')}</button></div>
+    <div id="eu_err" style="color:var(--danger);font-size:13px"></div></div>`;
+}
+async function saveUser(id){
+  spin(true);
+  const r=await api('admin/user/update',{token:SES.token,user_id:id,
+    full:document.getElementById('eu_fn').value.trim(),email:document.getElementById('eu_em').value.trim(),
+    dept_id:document.getElementById('eu_dept').value||'',is_active:document.getElementById('eu_act').value});
+  await refreshBoot(); spin(false);
+  if(!r.ok){ document.getElementById('eu_err').textContent=r.error; return; } render();
+}
+async function resetPw(id,username){
+  if(!confirm(t('resetPw')+' · '+username+'?')) return;
+  spin(true); const r=await api('admin/resetpw',{token:SES.token,user_id:id}); spin(false);
+  if(!r.ok){ alert(r.error); return; }
+  alert(t('tempPwTitle')+'\n\n'+t('tempPwMsg')+'\n\n'+username+' : '+r.temp_password);
+}
+async function addWetOp(){
+  const he=document.getElementById('wo_he').value.trim(), en=document.getElementById('wo_en').value.trim();
+  if(!he){ document.getElementById('wo_err').textContent=t('required2'); return; }
+  spin(true); const r=await api('admin/wetop/create',{token:SES.token,name_he:he,name_en:en}); await refreshBoot(); spin(false);
+  if(!r.ok){ document.getElementById('wo_err').textContent=r.error; return; } render();
 }
 
 /* ── כספים / דוחות ── */
-let FIN_CACHE=[];
+let FIN_ALL=[];        // כל ההזמנות
+let FIN_VIEW=[];       // לאחר סינון
+const FIN_COLS=[       // עמודות זמינות לייצוא
+  ['seq','#'],['status','status'],['dept','dept'],['route','route'],['pax','pax'],
+  ['initiator','initiator'],['agent','agent'],['openDate','openDate'],['departure','departure'],
+  ['ticketingDate','ticketingDate'],['price','price'],['currency','currency'],['pnr','pnr'],
+  ['prefTime','prefTime'],['wetOp','wetOp'],['updatedBy','updatedBy']];
+let FIN_SELCOLS=FIN_COLS.map(c=>c[0]);   // ברירת מחדל: הכל
+const TPL_KEY='arkia_report_templates';
+function loadTpls(){ try{ return JSON.parse(localStorage.getItem(TPL_KEY)||'{}'); }catch(e){ return {}; } }
+function saveTpls(o){ localStorage.setItem(TPL_KEY,JSON.stringify(o)); }
+
 async function renderFinance(app){
   app.innerHTML=`<div class="card"><h2>${t('finance')}</h2><div class="muted">…</div></div>`;
   const r=await api('bookings',{token:SES.token});
-  const list=r.ok?(r.bookings||[]):[];
-  FIN_CACHE=list;
+  FIN_ALL=r.ok?(r.bookings||[]):[];
+  FIN_VIEW=FIN_ALL.slice();
+  drawFinance(app);
+}
+function drawFinance(app){
+  const list=FIN_VIEW;
   const openN=list.filter(b=>!stTerminal(b.status)).length;
   const tkN=list.filter(b=>b.status==='TICKETED').length;
   const cnN=list.filter(b=>b.status==='CANCELLED').length;
+  const paxTot=list.reduce((s,b)=>s+(Number(b.pax)||0),0);
   const sums={};
   list.filter(b=>b.status==='TICKETED'&&b.price!=null).forEach(b=>{sums[b.currency]=(sums[b.currency]||0)+Number(b.price);});
   const sumCards=Object.keys(sums).map(c=>`<div class="kpi"><div class="l">${c} · ${t('ticketed')}</div><div class="n">${curSym(c)+sums[c].toLocaleString()}</div></div>`).join('');
-  app.innerHTML=`<div class="card"><h2>${t('finance')}</h2>
+  const deptOpts=BOOT.departments.map(d=>`<option value="${d.id}">${esc(deptName(d))}</option>`).join('');
+  const stOpts=(BOOT.statuses||[]).map(s=>`<option value="${s.code}">${VIEW.lang==='en'?s.en:s.he}</option>`).join('');
+  const tpls=loadTpls(); const tplOpts=Object.keys(tpls).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  app.innerHTML=`<div class="card"><h2>${t('finance')} · ${t('filters')}</h2>
+    <div class="rowflex">
+      <div><label class="f">${t('fromDate')} (${t('ticketingDate')})</label><input id="f_from" class="fld" type="date"></div>
+      <div><label class="f">${t('toDate')}</label><input id="f_to" class="fld" type="date"></div>
+      <div><label class="f">${t('dept')}</label><select id="f_dept" class="fld"><option value="">${t('all')}</option>${deptOpts}</select></div>
+      <div><label class="f">${t('status')}</label><select id="f_status" class="fld"><option value="">${t('all')}</option>${stOpts}</select></div>
+    </div>
+    <div class="btnrow"><button class="btn" onclick="applyFin()">${t('applyFilters')}</button>
+      <button class="btn ghost" onclick="clearFin()">${t('clearFilters')}</button></div>
+  </div>
+  <div class="card"><h2>${t('dashboard')}</h2>
     <div class="grid">
       <div class="kpi"><div class="l">${t('total')}</div><div class="n">${list.length}</div></div>
       <div class="kpi"><div class="l">${t('open')}</div><div class="n">${openN}</div></div>
       <div class="kpi"><div class="l">${t('ticketed')}</div><div class="n">${tkN}</div></div>
       <div class="kpi"><div class="l">${t('cancelled')}</div><div class="n">${cnN}</div></div>
+      <div class="kpi"><div class="l">${t('pax')}</div><div class="n">${paxTot}</div></div>
       ${sumCards}
     </div>
-    <div class="btnrow"><button class="btn ghost sm" onclick="exportCSV()">⬇ ${t('exportExcel')}</button></div>
-    <div class="tablewrap" style="margin-top:10px"><table><thead><tr>
-      <th>#</th><th>${t('status')}</th><th>${t('dept')}</th><th>${t('initiator')}</th><th>${t('agent')}</th>
+  </div>
+  <div class="card"><h2>${t('reportTemplate')} · ${t('columns')}</h2>
+    <div class="cols">${FIN_COLS.map(c=>`<label><input type="checkbox" onchange="toggleCol('${c[0]}',this.checked)" ${FIN_SELCOLS.includes(c[0])?'checked':''}> ${t(c[1])}</label>`).join('')}</div>
+    <div class="rowflex" style="align-items:flex-end">
+      <div style="flex:0 0 auto"><button class="btn ghost sm" onclick="exportCSV()">⬇ ${t('exportExcel')}</button></div>
+      <div><label class="f">${t('templateName')}</label><input id="tpl_name" class="fld" placeholder="${t('templateName')}"></div>
+      <div style="flex:0 0 auto"><button class="btn sm" onclick="saveTpl()">${t('saveTemplate')}</button></div>
+      <div><label class="f">${t('loadTemplate')}</label><select id="tpl_sel" class="fld"><option value="">${t('none')}</option>${tplOpts}</select></div>
+      <div style="flex:0 0 auto"><button class="btn ghost sm" onclick="loadTpl()">${t('loadTemplate')}</button>
+        <button class="btn danger sm" onclick="delTpl()">${t('del')}</button></div>
+    </div>
+  </div>
+  <div class="card"><h2>${t('bookings')}</h2>
+    <div class="tablewrap"><table><thead><tr>
+      <th>#</th><th>${t('status')}</th><th>${t('dept')}</th><th>${t('route')}</th><th>${t('pax')}</th><th>${t('initiator')}</th><th>${t('agent')}</th>
       <th>${t('openDate')}</th><th>${t('departure')}</th><th>${t('ticketingDate')}</th><th>${t('price')}</th><th>${t('pnr')}</th>
     </tr></thead><tbody>${list.map(b=>`<tr onclick="openBk(${b.id})">
       <td>${b.seq}</td><td><span class="badge st-${b.status}">${stLabel(b.status)}</span></td>
-      <td>${esc(VIEW.lang==='en'?b.dept_en:b.dept_he)}</td><td>${esc(b.initiator)}</td><td>${esc(b.agent||t('none'))}</td>
+      <td>${esc(VIEW.lang==='en'?b.dept_en:b.dept_he)}</td><td>${esc(routeLabel(b))}</td><td>${b.pax||1}</td><td>${esc(b.initiator)}</td><td>${esc(b.agent||t('none'))}</td>
       <td>${b.open_date||''}</td><td>${b.departure_date||''}</td><td>${b.ticketing_date||''}</td>
       <td>${b.price!=null?curSym(b.currency)+Number(b.price).toLocaleString():''}</td><td>${esc(b.pnr||'')}</td>
-    </tr>`).join('')||`<tr><td colspan="10" class="muted">${t('noBookings')}</td></tr>`}</tbody></table></div></div>`;
+    </tr>`).join('')||`<tr><td colspan="12" class="muted">${t('noBookings')}</td></tr>`}</tbody></table></div></div>`;
+}
+function applyFin(){
+  const from=document.getElementById('f_from').value, to=document.getElementById('f_to').value;
+  const dep=document.getElementById('f_dept').value, st=document.getElementById('f_status').value;
+  FIN_VIEW=FIN_ALL.filter(b=>{
+    if(from && (!b.ticketing_date || b.ticketing_date<from)) return false;
+    if(to && (!b.ticketing_date || b.ticketing_date>to)) return false;
+    if(dep && String(b.dept_id)!==String(dep)) return false;
+    if(st && b.status!==st) return false;
+    return true;
+  });
+  drawFinance(document.getElementById('app'));
+}
+function clearFin(){ FIN_VIEW=FIN_ALL.slice(); drawFinance(document.getElementById('app')); }
+function toggleCol(k,on){ if(on){ if(!FIN_SELCOLS.includes(k)) FIN_SELCOLS.push(k); } else { FIN_SELCOLS=FIN_SELCOLS.filter(x=>x!==k); } }
+function colVal(b,k){
+  switch(k){
+    case 'seq':return b.seq; case 'status':return stLabel(b.status);
+    case 'dept':return VIEW.lang==='en'?b.dept_en:b.dept_he; case 'route':return routeLabel(b);
+    case 'pax':return b.pax||1; case 'initiator':return b.initiator; case 'agent':return b.agent||'';
+    case 'openDate':return b.open_date||''; case 'departure':return b.departure_date||'';
+    case 'ticketingDate':return b.ticketing_date||''; case 'price':return b.price!=null?b.price:'';
+    case 'currency':return b.currency; case 'pnr':return b.pnr||'';
+    case 'prefTime':return b.pref_time||''; case 'wetOp':return VIEW.lang==='en'?(b.wet_op_en||''):(b.wet_op_he||'');
+    case 'updatedBy':return b.updated_by||''; default:return '';
+  }
 }
 function csvEsc(v){ v=String(v==null?'':v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
 function exportCSV(){
-  const head=['#',t('status'),t('dept'),t('initiator'),t('agent'),t('openDate'),t('departure'),t('ticketingDate'),t('price'),t('currency'),t('pnr')];
-  const rows=FIN_CACHE.map(b=>[b.seq,stLabel(b.status),(VIEW.lang==='en'?b.dept_en:b.dept_he),b.initiator,b.agent||'',b.open_date||'',b.departure_date||'',b.ticketing_date||'',b.price!=null?b.price:'',b.currency,b.pnr||'']);
+  const cols=FIN_COLS.filter(c=>FIN_SELCOLS.includes(c[0]));
+  const head=cols.map(c=>t(c[1]));
+  const rows=FIN_VIEW.map(b=>cols.map(c=>colVal(b,c[0])));
   const csv='﻿'+[head.join(','),...rows.map(r=>r.map(csvEsc).join(','))].join('\n');
   const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
   const a=document.createElement('a'); a.href=url; a.download='bookings.csv'; a.click(); URL.revokeObjectURL(url);
+}
+function saveTpl(){
+  const name=document.getElementById('tpl_name').value.trim(); if(!name){ alert(t('required2')); return; }
+  const o=loadTpls(); o[name]={cols:FIN_SELCOLS.slice()}; saveTpls(o);
+  drawFinance(document.getElementById('app'));
+}
+function loadTpl(){
+  const name=document.getElementById('tpl_sel').value; if(!name) return;
+  const o=loadTpls(); if(o[name]){ FIN_SELCOLS=o[name].cols.slice(); drawFinance(document.getElementById('app')); }
+}
+function delTpl(){
+  const name=document.getElementById('tpl_sel').value; if(!name) return;
+  const o=loadTpls(); delete o[name]; saveTpls(o); drawFinance(document.getElementById('app'));
 }
 
 /* ── הזמנה חדשה ── */
 function renderNew(app){
   const dep=BOOT.departments.find(d=>d.id===SES.user.dept_id);
   const agentOpts=BOOT.agents.map(a=>`<option value="${a.id}">${esc(a.name)}</option>`).join('');
-  const curOpts=BOOT.currencies.map(c=>`<option value="${c.code}" ${c.is_default==='Y'?'selected':''}>${c.code} ${c.symbol}</option>`).join('');
+  const acmi=isACMI(SES.user.dept_id);
+  const wetOpts=(BOOT.wet_operators||[]).map(w=>`<option value="${w.id}">${esc(VIEW.lang==='en'?w.name_en:w.name_he)}</option>`).join('');
   app.innerHTML=`<div class="card"><h2>${t('newB')}</h2>
     <p class="muted">${t('dept')}: <b>${dep?esc(deptName(dep)):t('none')}</b></p>
     <div class="rowflex">
       <div><label class="f">${t('departure')} *</label><input id="n_dep" class="fld" type="date"></div>
-      <div><label class="f">${t('estPrice')}</label><input id="n_price" class="fld" type="number" min="0" placeholder="0"></div>
-      <div><label class="f">${t('currency')}</label><select id="n_cur" class="fld">${curOpts}</select></div>
+      <div><label class="f">${t('prefTime')} ${t('optional')}</label><input id="n_time" class="fld" type="time"></div>
+      <div><label class="f">${t('pax')}</label><input id="n_pax" class="fld" type="number" min="1" value="1"></div>
+    </div>
+    <div class="rowflex">
+      <div><label class="f">${t('origin')} (IATA)</label><input id="n_org" class="fld" list="airportsList" dir="ltr" placeholder="TLV"></div>
+      <div><label class="f">${t('dest')} (IATA)</label><input id="n_dst" class="fld" list="airportsList" dir="ltr" placeholder="JFK"></div>
+      ${acmi?`<div><label class="f">${t('wetOp')}</label><select id="n_wet" class="fld"><option value="">${t('none')}</option>${wetOpts}</select></div>`:''}
     </div>
     <label class="f">${t('chooseAgent')} *</label><select id="n_agent" class="fld"><option value="">${t('none')}</option>${agentOpts}</select>
     <label class="f">${t('quoteNotes')}</label><textarea id="n_note" class="fld" rows="2"></textarea>
@@ -389,10 +573,15 @@ function renderNew(app){
 async function createBooking(){
   const dep=document.getElementById('n_dep').value, agent=document.getElementById('n_agent').value;
   if(!dep||!agent){ document.getElementById('n_err').textContent=t('required2'); return; }
+  const wetEl=document.getElementById('n_wet');
   spin(true);
-  const r=await api('bookings/create',{token:SES.token,departure:dep,
-    price:document.getElementById('n_price').value||'',currency:document.getElementById('n_cur').value,
-    agent_id:agent,notes:document.getElementById('n_note').value||''});
+  const r=await api('bookings/create',{token:SES.token,departure:dep,agent_id:agent,
+    notes:document.getElementById('n_note').value||'',
+    pax:document.getElementById('n_pax').value||'1',
+    pref_time:document.getElementById('n_time').value||'',
+    wet_op:wetEl?(wetEl.value||''):'',
+    origin:document.getElementById('n_org').value.trim(),
+    dest:document.getElementById('n_dst').value.trim()});
   spin(false);
   if(!r.ok){ document.getElementById('n_err').textContent=r.error; return; }
   VIEW.tab='bookings'; VIEW.bookingId=r.id; render();
@@ -404,19 +593,25 @@ async function renderDetail(app,id){
   const r=await api('bookings/get',{token:SES.token,id:id});
   if(!r.ok||!r.booking){ VIEW.bookingId=null; return render(); }
   const b=r.booking, files=r.files||[], log=r.log||[];
-  const ag=BOOT.agents.find(a=>a.id===b.agent_id);
+  if(VIEW.editing) return renderEdit(app,b);
   const cobrand = b.agent_id?`<div class="cobrand">
     <img src="/ords/arkia/api/assets/arkia" alt="Arkia" onerror="this.replaceWith('ARKIA')">
     <span class="x">✕</span>
-    <img src="/ords/arkia/api/assets/teltos" alt="${esc(b.agent)}" onerror="this.style.display='none'">
+    <img src="/ords/arkia/api/assets/teltos" alt="${esc(b.agent)}" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'${esc(b.agent)}'}))">
     <span class="muted" style="font-size:12px">${t('cobrandNote')}: <b>${esc(b.agent)}</b></span></div>`:'';
   const kpi=(l,v)=>`<div class="kpi"><div class="l">${l}</div><div class="n">${v}</div></div>`;
+  const wetName=VIEW.lang==='en'?b.wet_op_en:b.wet_op_he;
   app.innerHTML=`<div class="card">
-    <div class="btnrow" style="margin:0 0 10px"><button class="btn ghost sm" onclick="VIEW.bookingId=null;render()">← ${t('back')}</button></div>
+    <div class="btnrow" style="margin:0 0 10px"><button class="btn ghost sm" onclick="VIEW.bookingId=null;render()">← ${t('back')}</button>
+      ${canEdit(b)?`<button class="btn ghost sm" onclick="VIEW.editing=true;render()">✎ ${t('edit')}</button>`:''}</div>
     ${cobrand}
     <h2>${t('details')} #${b.seq} <span class="badge st-${b.status}">${stLabel(b.status)}</span></h2>
     <div class="grid">
       ${kpi(t('dept'),esc(VIEW.lang==='en'?b.dept_en:b.dept_he))}
+      ${kpi(t('route'),esc(routeLabel(b)))}
+      ${kpi(t('pax'),b.pax||1)}
+      ${b.pref_time?kpi(t('prefTime'),esc(b.pref_time)):''}
+      ${wetName?kpi(t('wetOp'),esc(wetName)):''}
       ${kpi(t('initiator'),esc(b.initiator))}
       ${kpi(t('agent'),esc(b.agent||t('none')))}
       ${kpi(t('approver'),esc(b.approver||t('none')))}
@@ -427,6 +622,7 @@ async function renderDetail(app,id){
       ${kpi(t('pnr'),esc(b.pnr||t('none')))}
       ${kpi(t('uref'),esc(b.unique_ref||t('none')))}
     </div>
+    ${b.origin||b.dest?`<h3>${t('route')}</h3><div class="muted">${esc(apLabel(b.origin))} → ${esc(apLabel(b.dest))}</div>`:''}
     ${b.trip_details?`<h3>${t('tripDetails')}</h3><div class="muted">${esc(b.trip_details)}</div>`:''}
     ${b.quote_notes?`<h3>${t('quoteNotes')}</h3><div class="muted">${esc(b.quote_notes)}</div>`:''}
     ${b.rejection_reason?`<h3>${t('reject')} · ${t('reason')}</h3><div class="muted">${esc(b.rejection_reason)}</div>`:''}
@@ -442,9 +638,55 @@ async function renderDetail(app,id){
   </div>
   <div class="card"><h2>${t('timeline')}</h2><ul class="timeline">${
     log.map(l=>`<li><span class="dot"></span>
-      <div class="tl-h">${l.from?stLabel(l.from)+' → ':''}${stLabel(l.to)}</div>
+      <div class="tl-h">${l.from&&l.from!==l.to?stLabel(l.from)+' → ':''}${stLabel(l.to)}</div>
       <div class="tl-m">${t('who')}: ${esc(l.by)} · ${l.at}</div>
       ${l.note?`<div class="tl-note">${esc(l.note)}</div>`:''}</li>`).join('')}</ul></div>`;
+}
+function canEdit(b){
+  if(['TICKETED','CANCELLED','REJECTED'].includes(b.status)) return false;
+  if(hasRole('ADMIN')) return true;
+  if(b.initiator_id===SES.user.id) return true;
+  if(hasRole('APPROVER') && (b.approver_id===SES.user.id || SES.user.dept_id===b.dept_id)) return true;
+  return false;
+}
+function renderEdit(app,b){
+  const agentOpts=BOOT.agents.map(a=>`<option value="${a.id}" ${a.id===b.agent_id?'selected':''}>${esc(a.name)}</option>`).join('');
+  const acmi=b.dept_code==='ACMI'||isACMI(b.dept_id);
+  const wetOpts=(BOOT.wet_operators||[]).map(w=>`<option value="${w.id}" ${w.id===b.wet_op_id?'selected':''}>${esc(VIEW.lang==='en'?w.name_en:w.name_he)}</option>`).join('');
+  app.innerHTML=`<div class="card">
+    <div class="btnrow" style="margin:0 0 10px"><button class="btn ghost sm" onclick="VIEW.editing=false;render()">← ${t('back')}</button></div>
+    <h2>${t('editBooking')} #${b.seq}</h2>
+    <div class="rowflex">
+      <div><label class="f">${t('departure')}</label><input id="e_dep" class="fld" type="date" value="${b.departure_date||''}"></div>
+      <div><label class="f">${t('prefTime')} ${t('optional')}</label><input id="e_time" class="fld" type="time" value="${esc(b.pref_time||'')}"></div>
+      <div><label class="f">${t('pax')}</label><input id="e_pax" class="fld" type="number" min="1" value="${b.pax||1}"></div>
+    </div>
+    <div class="rowflex">
+      <div><label class="f">${t('origin')} (IATA)</label><input id="e_org" class="fld" list="airportsList" dir="ltr" value="${esc(b.origin||'')}"></div>
+      <div><label class="f">${t('dest')} (IATA)</label><input id="e_dst" class="fld" list="airportsList" dir="ltr" value="${esc(b.dest||'')}"></div>
+      ${acmi?`<div><label class="f">${t('wetOp')}</label><select id="e_wet" class="fld"><option value="">${t('none')}</option>${wetOpts}</select></div>`:''}
+    </div>
+    <label class="f">${t('agent')}</label><select id="e_agent" class="fld"><option value="">${t('none')}</option>${agentOpts}</select>
+    <label class="f">${t('quoteNotes')}</label><textarea id="e_note" class="fld" rows="2">${esc(b.quote_notes||'')}</textarea>
+    <div class="btnrow"><button class="btn ok" onclick="saveEdit(${b.id})">${t('save')}</button>
+      <button class="btn ghost" onclick="VIEW.editing=false;render()">${t('back')}</button></div>
+    <div id="e_err" style="color:var(--danger);margin-top:6px"></div></div>`;
+}
+async function saveEdit(id){
+  const wetEl=document.getElementById('e_wet');
+  spin(true);
+  const r=await api('bookings/edit',{token:SES.token,id:id,
+    departure:document.getElementById('e_dep').value||'',
+    agent_id:document.getElementById('e_agent').value||'',
+    notes:document.getElementById('e_note').value||'',
+    pax:document.getElementById('e_pax').value||'',
+    pref_time:document.getElementById('e_time').value||'',
+    wet_op:wetEl?(wetEl.value||''):'',
+    origin:document.getElementById('e_org').value.trim(),
+    dest:document.getElementById('e_dst').value.trim()});
+  spin(false);
+  if(!r.ok){ document.getElementById('e_err').textContent=r.error; return; }
+  VIEW.editing=false; render();
 }
 function actionsHtml(b){
   const isAgent = hasRole('AGENT') && SES.agent_id && b.agent_id===SES.agent_id;
