@@ -119,14 +119,15 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
     p_subj_he IN VARCHAR2, p_subj_en IN VARCHAR2,
     p_msg_he  IN VARCHAR2, p_msg_en  IN VARCHAR2
   ) IS
-    l_lang  app_users.pref_lang%TYPE;
-    l_email app_users.email%TYPE;
-    l_msg   VARCHAR2(1000);
-    l_subj  VARCHAR2(200);
-    l_dir   VARCHAR2(3);
+    l_lang   app_users.pref_lang%TYPE;
+    l_email  app_users.email%TYPE;
+    l_notify VARCHAR2(1);
+    l_msg    VARCHAR2(1000);
+    l_subj   VARCHAR2(200);
+    l_dir    VARCHAR2(3);
   BEGIN
     BEGIN
-      SELECT pref_lang, email INTO l_lang, l_email
+      SELECT pref_lang, email, NVL(notify_email,'Y') INTO l_lang, l_email, l_notify
         FROM app_users WHERE user_id = p_user_id AND is_active = 'Y';
     EXCEPTION
       WHEN NO_DATA_FOUND THEN RETURN;   -- נמען לא פעיל/לא קיים — דילוג
@@ -146,7 +147,8 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
 
     -- מייל (best-effort). עובד גם מהקשר ORDS (לא רק מתוך APEX):
     -- קובעים security group של ה-Workspace לפני APEX_MAIL, ודוחפים את התור מיד.
-    IF l_email IS NOT NULL THEN
+    -- מכובד אם המשתמש כיבה התראות מייל (notify_email='N') — הפעמון עדיין נרשם.
+    IF l_email IS NOT NULL AND l_notify = 'Y' THEN
       BEGIN
         BEGIN
           APEX_UTIL.SET_SECURITY_GROUP_ID(APEX_UTIL.FIND_SECURITY_GROUP_ID('ARKIA'));
@@ -286,14 +288,15 @@ END booking_pkg;
 SHOW ERRORS
 
 --------------------------------------------------------------------------------
--- קביעת סיסמאות ברירת מחדל למשתמשי הדמו (לשנות לפני שימוש אמיתי!)
+-- קביעת סיסמת ברירת מחדל למשתמשי הדמו — רק אם עדיין אין להם סיסמה.
+-- (בטוח להרצה חוזרת ב-CI: לא דורס סיסמאות שכבר נקבעו/שונו.)
 --------------------------------------------------------------------------------
 BEGIN
-  booking_pkg.set_password('admin',          'Arkia2026!');
-  booking_pkg.set_password('initiator_acmi', 'Arkia2026!');
-  booking_pkg.set_password('approver_acmi',  'Arkia2026!');
-  booking_pkg.set_password('finance',        'Arkia2026!');
-  booking_pkg.set_password('teltos',       'Arkia2026!');
+  FOR u IN (SELECT username FROM app_users
+             WHERE username IN ('admin','initiator_acmi','approver_acmi','finance','teltos')
+               AND password_hash IS NULL) LOOP
+    booking_pkg.set_password(u.username, 'Arkia2026!');
+  END LOOP;
   COMMIT;
 END;
 /

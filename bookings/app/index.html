@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
-<title>תיעוד הזמנות טיסות · ארקיע</title>
+<title>הזמנת טיסות מטלטוס · ארקיע</title>
 <style>
   :root{
     --bg:#f2f5f9; --card:#fff; --ink:#0e1c2e; --muted:#5b6b7f;
@@ -93,7 +93,7 @@
 <div id="lock">
   <div class="panel">
     <img class="wm" src="/ords/arkia/api/assets/arkia" alt="Arkia" style="width:150px;max-width:60%;height:auto;display:block;margin:0 auto 8px" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'wm',textContent:'ARKIA'}))">
-    <h1 id="lk_title">תיעוד הזמנות טיסות</h1>
+    <h1 id="lk_title">הזמנת טיסות מטלטוס</h1>
     <p>מערכת פנימית · ארקיע</p>
     <input id="lk_user" class="fld" placeholder="שם משתמש" autocomplete="username" dir="ltr">
     <input id="lk_pw" class="fld" type="password" placeholder="סיסמה" autocomplete="current-password" dir="ltr">
@@ -111,7 +111,8 @@
   <header class="app">
     <div class="row">
       <span class="logobadge"><img src="/ords/arkia/api/assets/arkia" alt="Arkia" onerror="this.parentNode.className='logotext';this.replaceWith('ARKIA')"></span>
-      <h1 id="app_title">תיעוד הזמנות טיסות</h1>
+      <span class="logobadge"><img src="/ords/arkia/api/assets/teltos" alt="Teltos" onerror="this.parentNode.className='logotext';this.replaceWith('טלטוס')"></span>
+      <h1 id="app_title">הזמנת טיסות מטלטוס</h1>
       <span class="spacer"></span>
       <button class="hbtn" id="langBtn"></button>
       <button class="hbtn bell" id="bellBtn">🔔<span class="count hidden" id="bellCount">0</span></button>
@@ -134,7 +135,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-18.5';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-18.6';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight
@@ -153,7 +154,7 @@ let APMAP = {};     // iata -> {name_he,name_en}
 let UNREAD = 0;
 
 const T = {
-  he:{title:"תיעוד הזמנות טיסות",logout:"יציאה",bookings:"הזמנות",newB:"הזמנה חדשה",notifications:"התראות",
+  he:{title:"הזמנת טיסות מטלטוס",logout:"יציאה",bookings:"הזמנות",newB:"הזמנה חדשה",notifications:"התראות",
     dept:"מחלקה",status:"סטטוס",initiator:"מזמין",agent:"סוכן",approver:"מאשר",openDate:"תאריך פתיחה",
     departure:"תאריך יציאה",ticketingDate:"תאריך כרטוס",price:"מחיר",currency:"מטבע",pnr:"PNR",uref:"מזהה חד-ערכי",
     none:"—",back:"חזרה",details:"פירוט הזמנה",timeline:"מעקב סטטוסים",files:"מסמכים",who:"מבצע",reason:"סיבה",
@@ -175,8 +176,11 @@ const T = {
     loadTemplate:"טען תבנית",del:"מחק",wetOperators:"מפעילים רטובים",addWetOp:"הוסף מפעיל",all:"הכל",
     lastUpdate:"עדכון אחרון",avgPax:"ממוצע נוסעים",byStatus:"לפי סטטוס",
     airports:"שדות תעופה",country:"מדינה",addAirport:"הוסף/עדכן שדה תעופה",activate:"הפעל",deactivate:"השבת",
-    resetEmailed:"נשלח מייל עם סיסמה זמנית למשתמש:",sendToAgents:"שלח לכל הסוכנים",chooseDest:"בחר יעד",openPool:"פתוחה לכל הסוכנים"},
-  en:{title:"Flight Booking Documentation",logout:"Logout",bookings:"Bookings",newB:"New Booking",notifications:"Notifications",
+    resetEmailed:"נשלח מייל עם סיסמה זמנית למשתמש:",sendToAgents:"שלח לכל הסוכנים",chooseDest:"בחר יעד",openPool:"פתוחה לכל הסוכנים",
+    del:"מחק",delUser:"מחיקת משתמש",confirmDel:"למחוק את המשתמש?",loginLog:"לוג כניסות",time:"זמן",cancelBooking:"בטל הזמנה",
+    emailNotif:"התראות במייל",emailOn:"מקבל התראות במייל",emailOff:"התראות מייל כבויות",
+    R_INITIATOR:"יוזם",R_APPROVER:"מאשר",R_AGENT:"סוכן",R_FINANCE:"פיננס",R_ADMIN:"מנהל מערכת"},
+  en:{title:"Flight Booking by Teltos",logout:"Logout",bookings:"Bookings",newB:"New Booking",notifications:"Notifications",
     dept:"Department",status:"Status",initiator:"Initiator",agent:"Agent",approver:"Approver",openDate:"Open Date",
     departure:"Departure",ticketingDate:"Ticketing Date",price:"Price",currency:"Currency",pnr:"PNR",uref:"Unique Ref",
     none:"—",back:"Back",details:"Booking Details",timeline:"Status Timeline",files:"Documents",who:"By",reason:"Reason",
@@ -198,7 +202,10 @@ const T = {
     loadTemplate:"Load template",del:"Delete",wetOperators:"Wet operators",addWetOp:"Add operator",all:"All",
     lastUpdate:"Last update",avgPax:"Avg passengers",byStatus:"By status",
     airports:"Airports",country:"Country",addAirport:"Add/update airport",activate:"Activate",deactivate:"Deactivate",
-    resetEmailed:"A temporary password was emailed to the user:",sendToAgents:"Send to all agents",chooseDest:"Choose destination",openPool:"Open to all agents"}
+    resetEmailed:"A temporary password was emailed to the user:",sendToAgents:"Send to all agents",chooseDest:"Choose destination",openPool:"Open to all agents",
+    delUser:"Delete user",confirmDel:"Delete this user?",loginLog:"Login log",time:"Time",cancelBooking:"Cancel booking",
+    emailNotif:"Email notifications",emailOn:"Email notifications on",emailOff:"Email notifications off",
+    R_INITIATOR:"Initiator",R_APPROVER:"Approver",R_AGENT:"Agent",R_FINANCE:"Finance",R_ADMIN:"Admin"}
 };
 function t(k){ return (T[VIEW.lang]||T.he)[k]||k; }
 function stLabel(code){ const s=STMAP[code]; return s?(VIEW.lang==='en'?s.en:s.he):code; }
@@ -261,6 +268,7 @@ function tabsFor(){
   if(canInitiate()) tabs.push(['new',t('newB')]);
   if(hasRole('FINANCE')||hasRole('ADMIN')) tabs.push(['finance',t('finance')]);
   if(hasRole('ADMIN')) tabs.push(['admin',t('admin')]);
+  if(hasRole('ADMIN')) tabs.push(['log',t('loginLog')]);
   return tabs;
 }
 async function refreshUnread(){
@@ -268,8 +276,10 @@ async function refreshUnread(){
   if(r.ok){ UNREAD=(r.notifications||[]).filter(n=>n.is_read==='N').length; }
   const bc=document.getElementById('bellCount'); bc.textContent=UNREAD; bc.classList.toggle('hidden',UNREAD===0);
 }
+function roleLabel(r){ return t('R_'+r)||r; }
 function render(){
-  document.getElementById('whoami').textContent=SES.user.full_name;
+  const roleTxt=(SES.roles||[]).map(roleLabel).join(' · ');
+  document.getElementById('whoami').textContent=SES.user.full_name+(roleTxt?(' · '+roleTxt):'');
   const bc=document.getElementById('bellCount'); bc.textContent=UNREAD; bc.classList.toggle('hidden',UNREAD===0);
   const nav=document.getElementById('tabs'); nav.innerHTML='';
   tabsFor().forEach(([k,lbl])=>{ const b=document.createElement('button'); b.textContent=lbl;
@@ -281,6 +291,7 @@ function render(){
   if(VIEW.tab==='new') return renderNew(app);
   if(VIEW.tab==='finance') return renderFinance(app);
   if(VIEW.tab==='admin') return renderAdmin(app);
+  if(VIEW.tab==='log') return renderLog(app);
   return renderBookings(app);
 }
 
@@ -351,6 +362,7 @@ async function renderAdmin(app){
       <td><div class="btnrow" style="margin:0">
         <button class="btn ghost sm" onclick="editUser(${i})">${t('edit')}</button>
         <button class="btn ghost sm" onclick="resetPw(${u.id},'${esc(u.username)}')">${t('resetPw')}</button>
+        <button class="btn danger sm" onclick="delUser(${u.id},'${esc(u.username)}')">${t('del')}</button>
       </div></td></tr>`).join('')}</tbody></table></div>
     <div id="edit_user_box"></div>
     <p class="muted" style="font-size:12px;margin-top:8px">${t('pwSecNote')}</p>
@@ -477,6 +489,29 @@ async function addWetOp(){
   spin(true); const r=await api('admin/wetop/create',{token:SES.token,name_he:he,name_en:en}); await refreshBoot(); spin(false);
   if(!r.ok){ document.getElementById('wo_err').textContent=r.error; return; } render();
 }
+async function delUser(id,username){
+  if(!confirm(t('confirmDel')+' '+username)) return;
+  spin(true); const r=await api('admin/user/delete',{token:SES.token,user_id:id}); spin(false);
+  if(!r.ok){
+    const map={cannot_delete_self:'לא ניתן למחוק את עצמך',user_has_bookings:'למשתמש יש הזמנות מקושרות — לא ניתן למחוק',user_not_found:'המשתמש לא נמצא'};
+    alert(map[r.error]||r.error); return;
+  }
+  render();
+}
+
+/* ── לוג כניסות (ADMIN) ── */
+async function renderLog(app){
+  app.innerHTML=`<div class="card"><h2>${t('loginLog')}</h2><div class="muted">…</div></div>`;
+  const r=await api('admin/logins',{token:SES.token});
+  const list=r.ok?(r.logins||[]):[];
+  app.innerHTML=`<div class="card"><h2>${t('loginLog')} <span class="muted" style="font-size:12px">(${list.length})</span></h2>
+    <input id="lgSearch" class="fld" placeholder="${t('search')}" oninput="filterLg()">
+    <div class="tablewrap" style="margin-top:8px"><table id="lgTable"><thead><tr>
+      <th>username</th><th>${t('name')}</th><th>${t('time')}</th></tr></thead>
+    <tbody>${list.map(l=>`<tr><td dir="ltr">${esc(l.username)}</td><td>${esc(l.full_name||t('none'))}</td><td dir="ltr">${esc(l.at)}</td></tr>`).join('')||`<tr><td colspan="3" class="muted">${t('none')}</td></tr>`}</tbody></table></div></div>`;
+}
+function filterLg(){ const q=document.getElementById('lgSearch').value.toLowerCase();
+  document.querySelectorAll('#lgTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
 
 /* ── כספים / דוחות ── */
 let FIN_ALL=[];        // כל ההזמנות
@@ -530,16 +565,18 @@ function drawFinance(app){
       ${sumCards}
     </div>
   </div>
-  <div class="card"><h2>${t('reportTemplate')} · ${t('columns')}</h2>
+  <div class="card"><h2>${t('exportExcel')}</h2>
+    <div class="btnrow"><button class="btn ghost sm" onclick="exportCSV()">⬇ ${t('exportExcel')}</button></div>
+    ${hasRole('ADMIN')?`
+    <h3>${t('reportTemplate')} · ${t('columns')}</h3>
     <div class="cols">${FIN_COLS.map(c=>`<label><input type="checkbox" onchange="toggleCol('${c[0]}',this.checked)" ${FIN_SELCOLS.includes(c[0])?'checked':''}> ${t(c[1])}</label>`).join('')}</div>
     <div class="rowflex" style="align-items:flex-end">
-      <div style="flex:0 0 auto"><button class="btn ghost sm" onclick="exportCSV()">⬇ ${t('exportExcel')}</button></div>
       <div><label class="f">${t('templateName')}</label><input id="tpl_name" class="fld" placeholder="${t('templateName')}"></div>
       <div style="flex:0 0 auto"><button class="btn sm" onclick="saveTpl()">${t('saveTemplate')}</button></div>
       <div><label class="f">${t('loadTemplate')}</label><select id="tpl_sel" class="fld"><option value="">${t('none')}</option>${tplOpts}</select></div>
       <div style="flex:0 0 auto"><button class="btn ghost sm" onclick="loadTpl()">${t('loadTemplate')}</button>
         <button class="btn danger sm" onclick="delTpl()">${t('del')}</button></div>
-    </div>
+    </div>`:''}
   </div>
   <div class="card"><h2>${t('bookings')}</h2>
     <div class="tablewrap"><table><thead><tr>
@@ -672,7 +709,6 @@ async function renderDetail(app,id){
       ${kpi(t('ticketingDate'),b.ticketing_date||t('none'))}
       ${kpi(t('price'),b.price!=null?curSym(b.currency)+Number(b.price).toLocaleString()+' '+b.currency:t('none'))}
       ${kpi(t('pnr'),esc(b.pnr||t('none')))}
-      ${kpi(t('uref'),esc(b.unique_ref||t('none')))}
     </div>
     ${b.origin||b.dest?`<h3>${t('route')}</h3><div class="muted">${esc(apLabel(b.origin))} → ${esc(apLabel(b.dest))}</div>`:''}
     ${b.trip_details?`<h3>${t('tripDetails')}</h3><div class="muted">${esc(b.trip_details)}</div>`:''}
@@ -748,8 +784,10 @@ function actionsHtml(b){
     h+=`<button class="btn danger" onclick="actReason(${b.id},'reject')">${t('reject')}</button>`; }
   if(b.status==='APPROVED'&&isAgent) h+=`<button class="btn" onclick="ticketForm(${b.id})">${t('ticket')}</button>`;
   if(b.status==='CANCEL_REQUESTED'&&isAgent) h+=`<button class="btn warn" onclick="act(${b.id},'confirm_cancel')">${t('confirmCancel')}</button>`;
-  if((isInitiator||isApprover)&&!stTerminal(b.status)&&b.status!=='CANCEL_REQUESTED')
-    h+=`<button class="btn ghost" onclick="actReason(${b.id},'request_cancel')">${t('requestCancel')}</button>`;
+  if((isInitiator||isApprover)&&!stTerminal(b.status)&&b.status!=='CANCEL_REQUESTED'){
+    const cl=b.status==='TICKETED'?t('requestCancel'):t('cancelBooking');
+    h+=`<button class="btn ghost" onclick="actReason(${b.id},'request_cancel')">${cl}</button>`;
+  }
   return h?`<div class="btnrow">${h}</div>`:'';
 }
 async function act(id,action,extra){
@@ -790,22 +828,20 @@ async function submitQuote(id){
 }
 function ticketForm(id){
   document.getElementById('actions').innerHTML=`<h3>${t('ticket')}</h3>
-    <div class="rowflex"><div><label class="f">${t('pnr')} *</label><input id="tk_pnr" class="fld"></div>
-      <div><label class="f">${t('uref')} *</label><input id="tk_ref" class="fld"></div>
-      <div><label class="f">${t('ticketingDate')}</label><input id="tk_date" class="fld" type="date" value="${new Date().toISOString().slice(0,10)}"></div></div>
+    <div class="rowflex"><div><label class="f">${t('pnr')} *</label><input id="tk_pnr" class="fld"></div></div>
     <label class="f">${t('uploadTicket')} *</label><input id="tk_file" class="fld" type="file" accept="image/*,application/pdf">
     <div class="btnrow"><button class="btn ok" onclick="submitTicket(${id})">${t('ticket')}</button>
       <button class="btn ghost" onclick="render()">${t('back')}</button></div>
     <div id="tk_err" style="color:var(--danger);font-size:13px;margin-top:6px"></div>`;
 }
 async function submitTicket(id){
-  const pnr=document.getElementById('tk_pnr').value.trim(), ref=document.getElementById('tk_ref').value.trim(), fi=document.getElementById('tk_file');
-  if(!pnr||!ref||!fi.files.length){ document.getElementById('tk_err').textContent=t('required2'); return; }
+  const pnr=document.getElementById('tk_pnr').value.trim(), fi=document.getElementById('tk_file');
+  if(!pnr||!fi.files.length){ document.getElementById('tk_err').textContent=t('required2'); return; }
   spin(true);
   const f=fi.files[0], b64=await fileToB64(f);
   let up=await api('files/upload',{token:SES.token,booking_id:id,kind:'FINAL_TICKET',filename:f.name,mime:f.type,data:b64});
   if(!up.ok){ spin(false); document.getElementById('tk_err').textContent=up.error; return; }
-  const r=await api('bookings/action',{token:SES.token,id:id,action:'ticket',pnr:pnr,ref:ref,tdate:document.getElementById('tk_date').value});
+  const r=await api('bookings/action',{token:SES.token,id:id,action:'ticket',pnr:pnr,ref:'',tdate:''});
   spin(false);
   if(!r.ok){ document.getElementById('tk_err').textContent=r.error; return; }
   await refreshUnread(); render();
@@ -817,11 +853,21 @@ async function renderNotifications(app){
   app.innerHTML=`<div class="card"><h2>${t('notifications')}</h2><div class="muted">…</div></div>`;
   const r=await api('notifications',{token:SES.token});
   const list=r.ok?(r.notifications||[]):[];
+  const nOn=SES.user.notify_email!=='N';
   app.innerHTML=`<div class="card"><div style="display:flex;align-items:center;gap:10px">
     <h2 style="margin:0;flex:1">${t('notifications')}</h2>
     <button class="btn ghost sm" onclick="markAllRead()">${t('markRead')}</button></div>
+    <div style="margin-top:8px;display:flex;align-items:center;gap:10px;font-size:13px">
+      <span>${t('emailNotif')}:</span>
+      <button class="btn ${nOn?'ok':'ghost'} sm" onclick="toggleNotify()">${nOn?t('emailOn'):t('emailOff')}</button>
+    </div>
     <div style="margin-top:10px">${list.map(n=>`<div class="notif ${n.is_read==='N'?'unread':''}" onclick="openFromNotif(${n.booking_id||'null'})">
       <span>🔔</span><div style="flex:1">${esc(n.message)}<div class="t">${n.at}</div></div></div>`).join('')||`<div class="muted">${t('noNotif')}</div>`}</div></div>`;
+}
+async function toggleNotify(){
+  const to=SES.user.notify_email==='N'?'Y':'N';
+  spin(true); const r=await api('notify/set',{token:SES.token,on:to}); spin(false);
+  if(r.ok){ SES.user.notify_email=to; } render();
 }
 async function markAllRead(){ spin(true); await api('notifications/read',{token:SES.token}); await refreshUnread(); spin(false); render(); }
 async function openFromNotif(bid){ await api('notifications/read',{token:SES.token}); await refreshUnread();

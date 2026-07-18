@@ -13,6 +13,7 @@ on:
     paths:
       - "bookings/api/**"
       - "bookings/app/**"
+      - "bookings/db/03_booking_pkg.sql"
       - ".github/workflows/deploy-bookings.yml"
   workflow_dispatch: {}   # מאפשר הרצה ידנית מה-Actions tab
 
@@ -67,10 +68,23 @@ jobs:
           connect ${DB_USER}/"${DB_PASSWORD}"@${DB_CONN}
           set define off
           set serveroutput on
-          prompt === Deploying install_api.sql ===
+          prompt === Deploying install_api.sql (migration + REST) ===
           @bookings/api/install_api.sql
+          prompt === Deploying 03_booking_pkg.sql (workflow package) ===
+          @bookings/db/03_booking_pkg.sql
           prompt === Deploying install_ui.sql ===
           @bookings/api/install_ui.sql
+          prompt === Recompiling any invalid packages ===
+          begin
+            for o in (select object_name, object_type from user_objects
+                       where status='INVALID' and object_type in ('PACKAGE','PACKAGE BODY')) loop
+              begin
+                execute immediate 'ALTER PACKAGE "'||o.object_name||'" COMPILE'||
+                  case when o.object_type='PACKAGE BODY' then ' BODY' else '' end;
+              exception when others then null; end;
+            end loop;
+          end;
+          /
           prompt === Verifying api_pkg is VALID ===
           declare n number; begin
             select count(*) into n from user_objects

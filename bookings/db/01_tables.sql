@@ -96,6 +96,7 @@ CREATE TABLE app_users (
   dept_id       NUMBER,
   pref_lang     VARCHAR2(2) DEFAULT 'HE' NOT NULL CHECK (pref_lang IN ('HE','EN')),
   is_active     CHAR(1) DEFAULT 'Y' NOT NULL CHECK (is_active IN ('Y','N')),
+  notify_email  CHAR(1) DEFAULT 'Y' NOT NULL CHECK (notify_email IN ('Y','N')),
   -- אימות: hash + salt (נגזר ב-APEX ע"י custom authentication). ראו BUILD_GUIDE.
   password_hash VARCHAR2(200),
   password_salt VARCHAR2(60),
