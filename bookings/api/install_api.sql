@@ -122,6 +122,80 @@ EXCEPTION WHEN OTHERS THEN NULL;
 END;
 /
 
+-- ── יעדים ממערכת התמחיר (idempotent, MERGE לפי IATA) ──
+DECLARE
+  PROCEDURE seed_ap (p_iata VARCHAR2, p_he VARCHAR2, p_en VARCHAR2, p_country VARCHAR2) IS
+  BEGIN
+    MERGE INTO airports a USING (SELECT p_iata AS iata FROM dual) s ON (a.iata = s.iata)
+    WHEN NOT MATCHED THEN INSERT (iata, name_he, name_en, city_he, city_en, country)
+      VALUES (p_iata, p_he, p_en, p_he, p_en, p_country);
+  END;
+BEGIN
+  seed_ap('AUH','אבו דאבי','Zayed International Airport','איחוד האמירויות הערביות');
+  seed_ap('ADD','אדיס אבבה','Addis Ababa Bole International Airport','אתיופיה');
+  seed_ap('AGA','אגאדיר','Agadir–Al Massira Airport','מרוקו');
+  seed_ap('ALA','אלמטי','Almaty International Airport','קזחסטן');
+  seed_ap('AMM','עמאן','Queen Alia International Airport','ירדן');
+  seed_ap('AYT','אנטליה','Antalya Airport','טורקיה');
+  seed_ap('AMS','אמסטרדם','Amsterdam Schiphol Airport','הולנד');
+  seed_ap('PVK','פרבזה','Aktion National Airport','יוון');
+  seed_ap('ATH','אתונה','Athens International Airport (Eleftherios Venizelos)','יוון');
+  seed_ap('BCM','בקאו','Bacau International Airport','רומניה');
+  seed_ap('BAH','בחריין','Bahrain International Airport','בחריין');
+  seed_ap('GYD','באקו','Heydar Aliyev International Airport','אזרביג׳אן');
+  seed_ap('BUS','בתומי','Batumi International Airport','גאורגיה');
+  seed_ap('BCN','ברצלונה','Josep Tarradellas Airport Barcelona-El Prat','ספרד');
+  seed_ap('BEG','בלגרד','Belgrade Nikola Tesla Airport','סרביה');
+  seed_ap('BLR','בנגלור','Kempegowda International Airport','הודו');
+  seed_ap('BER','ברלין','Berlin Brandenburg Airport','גרמניה');
+  seed_ap('BGO','ברגן','Bergen Airport','נורווגיה');
+  seed_ap('BGY','ברגמו','Bergamo-Il Caravaggio','איטליה');
+  seed_ap('GBE','גאבורונה','Sir Seretse Khama International Airport','בוטסואנה');
+  seed_ap('KBP','קייב','Boryspil International Airport','אוקראינה');
+  seed_ap('BLQ','בולוניה','Bologna Guglielmo Marconi Airport','איטליה');
+  seed_ap('BTS','ברטיסלאבה','M. R. Stefanik Airport','סלובקיה');
+  seed_ap('BRU','בריסל','Brussels Airport','בלגיה');
+  seed_ap('BUD','בודפשט','Budapest Ferenc Liszt International Airport','הונגריה');
+  seed_ap('BOJ','בורגס','Burgas Airport','בולגריה');
+  seed_ap('SJJ','סרייבו','Sarajevo International Airport','בוסניה והרצגובינה');
+  seed_ap('OTP','בוקרשט','Henri Coanda International Airport','רומניה');
+  seed_ap('CMN','קזבלנקה','Mohammed V International Airport','מרוקו');
+  seed_ap('CAG','קליארי','Cagliari Elmas Airport','איטליה');
+  seed_ap('CTA','קטניה','Catania-Fontanarossa Airport','איטליה');
+  seed_ap('KIV','קישינב','Chisinau International Airport','מולדובה');
+  seed_ap('CPH','קופנהגן','Copenhagen Airport','דנמרק');
+  seed_ap('CFU','קורפו','Corfu International Airport','יוון');
+  seed_ap('DSS','דקאר','Blaise Diagne International Airport','סנגל');
+  seed_ap('JIB','ג׳יבוטי','Djibouti-Ambouli International Airport','ג׳יבוטי');
+  seed_ap('DBV','דוברובניק','Dubrovnik Airport','קרואטיה');
+  seed_ap('DEB','דברצן','Debrecen International Airport','הונגריה');
+  seed_ap('DXB','דובאי','Dubai International Airport','איחוד האמירויות הערביות');
+  seed_ap('EIN','איינדהובן','Eindhoven Airport','הולנד');
+  seed_ap('EDI','אדינבורו','Edinburgh Airport','הממלכה המאוחדת');
+  seed_ap('FRA','פרנקפורט','Frankfurt Airport','גרמניה');
+  seed_ap('GPA','פטרס','Araxos Airport','יוון');
+  seed_ap('GLA','גלאזגו','Glasgow Airport','הממלכה המאוחדת');
+  seed_ap('GOI','גואה','Dabolim Airport','הודו');
+  seed_ap('GOX','גואה','Mopa Airport','הודו');
+  seed_ap('GNB','גרנובל','Grenoble-Isere Airport','צרפת');
+  seed_ap('GDN','גדנסק','Gdansk Lech Walesa Airport','פולין');
+  seed_ap('GVA','ז׳נבה','Geneva International Airport','שווייץ');
+  seed_ap('LPA','לאס פאלמס','Gran Canaria Airport','ספרד');
+  seed_ap('LCJ','לודז׳','Lodz Wladyslaw Reymont Airport','פולין');
+  seed_ap('HEL','הלסינקי','Helsinki Airport','פינלנד');
+  seed_ap('HER','הרקליון','Heraklion International Airport (Nikos Kazantzakis)','יוון');
+  seed_ap('HRG','הורגדה','Hurghada International Airport','מצרים');
+  seed_ap('LHR','לונדון','London Heathrow Airport','הממלכה המאוחדת');
+  seed_ap('LTN','לונדון','London Luton Airport','הממלכה המאוחדת');
+  seed_ap('IST','איסטנבול','Istanbul Airport','טורקיה');
+  seed_ap('IBZ','איביזה','Ibiza Airport','ספרד');
+  seed_ap('NOS','מחוז אנצינאנה','Fascene Airport','מדגסקר');
+  seed_ap('RMI','רימיני','Federico Fellini International Airport','איטליה');
+  COMMIT;
+EXCEPTION WHEN OTHERS THEN NULL;
+END;
+/
+
 -- ── טבלת סשנים (טוקנים) ──
 BEGIN
   EXECUTE IMMEDIATE 'DROP TABLE api_sessions CASCADE CONSTRAINTS PURGE';
