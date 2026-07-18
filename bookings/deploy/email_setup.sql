@@ -18,8 +18,6 @@ BEGIN
     BEGIN
       DBMS_NETWORK_ACL_ADMIN.APPEND_HOST_ACE(
         host       => 'smtp.gmail.com',
-        lower_port => 587,
-        upper_port => 587,
         ace        => xs$ace_type(
                         privilege_list => xs$name_list('connect','resolve'),
                         principal_name => s.username,
