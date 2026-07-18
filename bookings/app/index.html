@@ -152,7 +152,8 @@ const T = {
     approve:"אשר",reject:"דחה",ticket:"כרטס",requestCancel:"בקש ביטול",confirmCancel:"אשר ביטול",
     uploadScreenshot:"צילום ממערכת ההזמנות",uploadTicket:"מסמך/תמונת כרטוס",noBookings:"אין הזמנות להצגה",
     markRead:"סמן הכל כנקרא",noNotif:"אין התראות",estPrice:"מחיר משוער",chooseAgent:"בחר סוכן",required:"שדה חובה",
-    download:"הורדה",view:"צפייה",cobrandNote:"בשיתוף",search:"חיפוש...",required2:"נא למלא שדות חובה"},
+    download:"הורדה",view:"צפייה",cobrandNote:"בשיתוף",search:"חיפוש...",required2:"נא למלא שדות חובה",
+    finance:"כספים",total:"סה\"כ הזמנות",open:"פתוחות",ticketed:"כורטסו",cancelled:"בוטלו",exportExcel:"ייצוא Excel (CSV)"},
   en:{title:"Flight Booking Documentation",logout:"Logout",bookings:"Bookings",newB:"New Booking",notifications:"Notifications",
     dept:"Department",status:"Status",initiator:"Initiator",agent:"Agent",approver:"Approver",openDate:"Open Date",
     departure:"Departure",ticketingDate:"Ticketing Date",price:"Price",currency:"Currency",pnr:"PNR",uref:"Unique Ref",
@@ -161,7 +162,8 @@ const T = {
     approve:"Approve",reject:"Reject",ticket:"Ticket",requestCancel:"Request Cancel",confirmCancel:"Confirm Cancel",
     uploadScreenshot:"Booking-system screenshot",uploadTicket:"Ticket document/image",noBookings:"No bookings to show",
     markRead:"Mark all read",noNotif:"No notifications",estPrice:"Estimated price",chooseAgent:"Choose agent",required:"Required",
-    download:"Download",view:"View",cobrandNote:"With",search:"Search...",required2:"Please fill required fields"}
+    download:"Download",view:"View",cobrandNote:"With",search:"Search...",required2:"Please fill required fields",
+    finance:"Finance",total:"Total bookings",open:"Open",ticketed:"Ticketed",cancelled:"Cancelled",exportExcel:"Export Excel (CSV)"}
 };
 function t(k){ return (T[VIEW.lang]||T.he)[k]||k; }
 function stLabel(code){ const s=STMAP[code]; return s?(VIEW.lang==='en'?s.en:s.he):code; }
@@ -210,6 +212,7 @@ function toggleLang(){ VIEW.lang=VIEW.lang==='en'?'he':'en'; applyLang(); render
 function tabsFor(){
   const tabs=[['bookings',t('bookings')]];
   if(hasRole('INITIATOR')) tabs.push(['new',t('newB')]);
+  if(hasRole('FINANCE')||hasRole('ADMIN')) tabs.push(['finance',t('finance')]);
   return tabs;
 }
 async function refreshUnread(){
@@ -228,6 +231,7 @@ function render(){
   if(VIEW.tab==='notifications') return renderNotifications(app);
   if(VIEW.bookingId) return renderDetail(app,VIEW.bookingId);
   if(VIEW.tab==='new') return renderNew(app);
+  if(VIEW.tab==='finance') return renderFinance(app);
   return renderBookings(app);
 }
 
@@ -253,6 +257,47 @@ async function renderBookings(app){
 function filterBk(){ const q=document.getElementById('bkSearch').value.toLowerCase();
   document.querySelectorAll('#bkTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
 function openBk(id){ VIEW.bookingId=id; render(); }
+
+/* ── כספים / דוחות ── */
+let FIN_CACHE=[];
+async function renderFinance(app){
+  app.innerHTML=`<div class="card"><h2>${t('finance')}</h2><div class="muted">…</div></div>`;
+  const r=await api('bookings',{token:SES.token});
+  const list=r.ok?(r.bookings||[]):[];
+  FIN_CACHE=list;
+  const openN=list.filter(b=>!stTerminal(b.status)).length;
+  const tkN=list.filter(b=>b.status==='TICKETED').length;
+  const cnN=list.filter(b=>b.status==='CANCELLED').length;
+  const sums={};
+  list.filter(b=>b.status==='TICKETED'&&b.price!=null).forEach(b=>{sums[b.currency]=(sums[b.currency]||0)+Number(b.price);});
+  const sumCards=Object.keys(sums).map(c=>`<div class="kpi"><div class="l">${c} · ${t('ticketed')}</div><div class="n">${curSym(c)+sums[c].toLocaleString()}</div></div>`).join('');
+  app.innerHTML=`<div class="card"><h2>${t('finance')}</h2>
+    <div class="grid">
+      <div class="kpi"><div class="l">${t('total')}</div><div class="n">${list.length}</div></div>
+      <div class="kpi"><div class="l">${t('open')}</div><div class="n">${openN}</div></div>
+      <div class="kpi"><div class="l">${t('ticketed')}</div><div class="n">${tkN}</div></div>
+      <div class="kpi"><div class="l">${t('cancelled')}</div><div class="n">${cnN}</div></div>
+      ${sumCards}
+    </div>
+    <div class="btnrow"><button class="btn ghost sm" onclick="exportCSV()">⬇ ${t('exportExcel')}</button></div>
+    <div class="tablewrap" style="margin-top:10px"><table><thead><tr>
+      <th>#</th><th>${t('status')}</th><th>${t('dept')}</th><th>${t('initiator')}</th><th>${t('agent')}</th>
+      <th>${t('openDate')}</th><th>${t('departure')}</th><th>${t('ticketingDate')}</th><th>${t('price')}</th><th>${t('pnr')}</th>
+    </tr></thead><tbody>${list.map(b=>`<tr onclick="openBk(${b.id})">
+      <td>${b.seq}</td><td><span class="badge st-${b.status}">${stLabel(b.status)}</span></td>
+      <td>${esc(VIEW.lang==='en'?b.dept_en:b.dept_he)}</td><td>${esc(b.initiator)}</td><td>${esc(b.agent||t('none'))}</td>
+      <td>${b.open_date||''}</td><td>${b.departure_date||''}</td><td>${b.ticketing_date||''}</td>
+      <td>${b.price!=null?curSym(b.currency)+Number(b.price).toLocaleString():''}</td><td>${esc(b.pnr||'')}</td>
+    </tr>`).join('')||`<tr><td colspan="10" class="muted">${t('noBookings')}</td></tr>`}</tbody></table></div></div>`;
+}
+function csvEsc(v){ v=String(v==null?'':v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+function exportCSV(){
+  const head=['#',t('status'),t('dept'),t('initiator'),t('agent'),t('openDate'),t('departure'),t('ticketingDate'),t('price'),t('currency'),t('pnr')];
+  const rows=FIN_CACHE.map(b=>[b.seq,stLabel(b.status),(VIEW.lang==='en'?b.dept_en:b.dept_he),b.initiator,b.agent||'',b.open_date||'',b.departure_date||'',b.ticketing_date||'',b.price!=null?b.price:'',b.currency,b.pnr||'']);
+  const csv='﻿'+[head.join(','),...rows.map(r=>r.map(csvEsc).join(','))].join('\n');
+  const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a'); a.href=url; a.download='bookings.csv'; a.click(); URL.revokeObjectURL(url);
+}
 
 /* ── הזמנה חדשה ── */
 function renderNew(app){
