@@ -94,10 +94,13 @@ END;
 -- ── זריעת שדות תעופה (idempotent, MERGE לפי IATA) ──
 DECLARE
   PROCEDURE seed_ap (p_iata VARCHAR2, p_he VARCHAR2, p_en VARCHAR2, p_country VARCHAR2) IS
+    n NUMBER;
   BEGIN
-    MERGE INTO airports a USING (SELECT p_iata AS iata FROM dual) s ON (a.iata = s.iata)
-    WHEN NOT MATCHED THEN INSERT (iata, name_he, name_en, city_he, city_en, country)
+    SELECT COUNT(*) INTO n FROM airports WHERE iata = p_iata;
+    IF n = 0 THEN
+      INSERT INTO airports (iata, name_he, name_en, city_he, city_en, country)
       VALUES (p_iata, p_he, p_en, p_he, p_en, p_country);
+    END IF;
   EXCEPTION WHEN OTHERS THEN NULL;  -- כשל בשורה בודדת לא יפיל את כל הקבוצה
   END;
 BEGIN
@@ -151,10 +154,13 @@ END;
 -- ── יעדים ממערכת התמחיר (idempotent, MERGE לפי IATA) ──
 DECLARE
   PROCEDURE seed_ap (p_iata VARCHAR2, p_he VARCHAR2, p_en VARCHAR2, p_country VARCHAR2) IS
+    n NUMBER;
   BEGIN
-    MERGE INTO airports a USING (SELECT p_iata AS iata FROM dual) s ON (a.iata = s.iata)
-    WHEN NOT MATCHED THEN INSERT (iata, name_he, name_en, city_he, city_en, country)
+    SELECT COUNT(*) INTO n FROM airports WHERE iata = p_iata;
+    IF n = 0 THEN
+      INSERT INTO airports (iata, name_he, name_en, city_he, city_en, country)
       VALUES (p_iata, p_he, p_en, p_he, p_en, p_country);
+    END IF;
   EXCEPTION WHEN OTHERS THEN NULL;  -- כשל בשורה בודדת לא יפיל את כל הקבוצה
   END;
 BEGIN
@@ -223,22 +229,6 @@ EXCEPTION WHEN OTHERS THEN NULL;
 END;
 /
 
--- ── דיאגנוסטיקה זמנית: הדפסת שגיאת ה-INSERT האמיתית + ספירת שדות התעופה ──
-BEGIN
-  BEGIN
-    INSERT INTO airports (iata,name_he,name_en,city_he,city_en,country)
-    VALUES ('ZZ1','בדיקה','Diagnostic Test Airport International','בדיקה','Test','בדיקה');
-    DBMS_OUTPUT.PUT_LINE('DIAG-AIRPORTS: test insert OK');
-    ROLLBACK;
-  EXCEPTION WHEN OTHERS THEN
-    DBMS_OUTPUT.PUT_LINE('DIAG-AIRPORTS: test insert ERR = '||SQLERRM);
-  END;
-  DECLARE n NUMBER; BEGIN
-    SELECT COUNT(*) INTO n FROM airports;
-    DBMS_OUTPUT.PUT_LINE('DIAG-AIRPORTS: total rows = '||n);
-  END;
-END;
-/
 
 -- ── טבלת סשנים (טוקנים) ── נוצרת רק אם אינה קיימת, כדי שסשנים ישרדו פריסות
 -- (משתמשים נשארים מחוברים במובייל בין דeployments).
