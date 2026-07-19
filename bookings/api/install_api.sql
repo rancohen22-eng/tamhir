@@ -300,6 +300,7 @@ CREATE OR REPLACE PACKAGE api_pkg AS
   -- מאשר לכל מחלקה
   FUNCTION  admin_dept_approvers (p_token VARCHAR2) RETURN CLOB;
   FUNCTION  admin_set_dept_approver (p_token VARCHAR2, p_dept_id NUMBER, p_user_id NUMBER) RETURN CLOB;
+  FUNCTION  admin_del_dept_approver (p_token VARCHAR2, p_dept_id NUMBER, p_user_id NUMBER) RETURN CLOB;
   FUNCTION  admin_usage (p_token VARCHAR2) RETURN CLOB;
 END api_pkg;
 /
@@ -346,6 +347,18 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
     SELECT COUNT(*) INTO n FROM user_roles WHERE user_id = p_uid AND role_code = p_role;
     RETURN CASE WHEN n > 0 THEN 'Y' ELSE 'N' END;
   END has_role;
+
+  -- האם המשתמש רשאי לאשר/לדחות הזמנה: אדמין, המאשר המשויך, או מאשר מוגדר של מחלקת ההזמנה
+  FUNCTION is_booking_approver (p_uid NUMBER, p_id NUMBER) RETURN BOOLEAN IS
+    l_dept NUMBER; l_apr NUMBER; n PLS_INTEGER;
+  BEGIN
+    IF has_role(p_uid,'ADMIN') = 'Y' THEN RETURN TRUE; END IF;
+    SELECT dept_id, approver_id INTO l_dept, l_apr FROM bookings WHERE booking_id = p_id;
+    IF l_apr = p_uid THEN RETURN TRUE; END IF;
+    SELECT COUNT(*) INTO n FROM dept_approvers WHERE dept_id = l_dept AND approver_user_id = p_uid;
+    RETURN n > 0;
+  EXCEPTION WHEN OTHERS THEN RETURN FALSE;
+  END is_booking_approver;
 
   FUNCTION login (p_username VARCHAR2, p_password VARCHAR2) RETURN CLOB IS
     l_uid NUMBER; l_token VARCHAR2(64); l_dept NUMBER; l_lang VARCHAR2(2); l_full VARCHAR2(150); l_agent NUMBER;
@@ -499,6 +512,11 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
         APEX_JSON.write('wet_op_id',r.wet_operator_id);
         APEX_JSON.write('wet_op_he',l_wohe); APEX_JSON.write('wet_op_en',NVL(l_woen,l_wohe));
         APEX_JSON.write('low_cost',r.low_cost); APEX_JSON.write('urgent',r.urgent);
+        DECLARE l_isapr NUMBER; BEGIN
+          SELECT COUNT(*) INTO l_isapr FROM dept_approvers WHERE dept_id=r.dept_id AND approver_user_id=l_uid;
+          APEX_JSON.write('can_approve',
+            CASE WHEN has_role(l_uid,'ADMIN')='Y' OR NVL(r.approver_id,-1)=l_uid OR l_isapr>0 THEN 'Y' ELSE 'N' END);
+        END;
       APEX_JSON.close_object;
       APEX_JSON.open_array('files');
         FOR f IN (SELECT file_id,file_kind,filename,mime_type FROM booking_files WHERE booking_id=p_id ORDER BY file_id) LOOP
@@ -543,43 +561,47 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
     BEGIN APEX_MAIL.PUSH_QUEUE; EXCEPTION WHEN OTHERS THEN NULL; END;
   END notify_agents;
 
-  -- מייל למאשר עם כפתור "אשר את ההצעה" (טוקן חד-פעמי) — נשלח כשהוגשה הצעת מחיר
+  -- מייל לכל מאשרי המחלקה עם כפתור "אשר את ההצעה" (טוקן חד-פעמי לכל מאשר) — נשלח כשהוגשה הצעת מחיר
   PROCEDURE notify_approver_quote (p_id NUMBER) IS
-    l_apr NUMBER; l_email VARCHAR2(200); l_lang VARCHAR2(2); l_notify VARCHAR2(1);
+    l_dept NUMBER; l_pinned NUMBER; l_any BOOLEAN := FALSE;
     l_token VARCHAR2(70); l_mail_id NUMBER; l_url VARCHAR2(400);
   BEGIN
-    SELECT approver_id INTO l_apr FROM bookings WHERE booking_id = p_id;
-    IF l_apr IS NULL THEN
-      SELECT MIN(approver_user_id) INTO l_apr FROM dept_approvers
-        WHERE dept_id = (SELECT dept_id FROM bookings WHERE booking_id = p_id);
-    END IF;
-    IF l_apr IS NULL THEN RETURN; END IF;
-    SELECT email, pref_lang, NVL(notify_email,'Y') INTO l_email, l_lang, l_notify
-      FROM app_users WHERE user_id = l_apr;
-    l_token := RAWTOHEX(SYS_GUID()) || RAWTOHEX(SYS_GUID());
-    INSERT INTO booking_action_tokens (token, booking_id, action, user_id, expires_at)
-      VALUES (l_token, p_id, 'approve', l_apr, SYSTIMESTAMP + INTERVAL '7' DAY);
-    INSERT INTO notifications (user_id, booking_id, notif_type, message)
-      VALUES (l_apr, p_id, 'QUOTE_RECEIVED',
-        CASE WHEN l_lang='EN' THEN 'A quote was submitted for booking #'||p_id||' — approval required'
-             ELSE 'התקבלה הצעת מחיר להזמנה #'||p_id||' — נדרש אישור' END);
+    SELECT dept_id, approver_id INTO l_dept, l_pinned FROM bookings WHERE booking_id = p_id;
+    -- נמעני האישור: כל המאשרים המוגדרים של המחלקה + המאשר המשויך (אם קיים), ללא כפילויות
+    FOR a IN (
+        SELECT u.user_id, u.email, u.pref_lang, NVL(u.notify_email,'Y') notify
+          FROM app_users u
+         WHERE u.user_id IN (
+                 SELECT approver_user_id FROM dept_approvers WHERE dept_id = l_dept
+                 UNION
+                 SELECT l_pinned FROM dual WHERE l_pinned IS NOT NULL)
+    ) LOOP
+      l_any := TRUE;
+      l_token := RAWTOHEX(SYS_GUID()) || RAWTOHEX(SYS_GUID());
+      INSERT INTO booking_action_tokens (token, booking_id, action, user_id, expires_at)
+        VALUES (l_token, p_id, 'approve', a.user_id, SYSTIMESTAMP + INTERVAL '7' DAY);
+      INSERT INTO notifications (user_id, booking_id, notif_type, message)
+        VALUES (a.user_id, p_id, 'QUOTE_RECEIVED',
+          CASE WHEN a.pref_lang='EN' THEN 'A quote was submitted for booking #'||p_id||' — approval required'
+               ELSE 'התקבלה הצעת מחיר להזמנה #'||p_id||' — נדרש אישור' END);
+      IF a.email IS NOT NULL AND a.notify = 'Y' THEN
+        l_url := REPLACE(booking_pkg.g_app_url, '/app', '') || '/act?t=' || l_token;
+        BEGIN
+          BEGIN APEX_UTIL.SET_SECURITY_GROUP_ID(APEX_UTIL.FIND_SECURITY_GROUP_ID('ARKIA')); EXCEPTION WHEN OTHERS THEN NULL; END;
+          l_mail_id := APEX_MAIL.SEND(p_to => a.email, p_from => booking_pkg.g_mail_from,
+            p_subj => CASE WHEN a.pref_lang='EN' THEN 'Arkia — approval required, booking #'||p_id ELSE 'ארקיע — נדרש אישור, הזמנה #'||p_id END,
+            p_body => TO_CLOB((CASE WHEN a.pref_lang='EN' THEN 'A quote was submitted and requires your approval.' ELSE 'התקבלה הצעת מחיר הממתינה לאישורך.' END)
+                      || CHR(10) || 'Approve: ' || l_url || CHR(10) || booking_pkg.g_app_url || '#b=' || p_id),
+            p_body_html => booking_pkg.booking_email_html(p_id, a.pref_lang, l_url));
+          FOR f IN (SELECT filename, mime_type, file_blob FROM booking_files WHERE booking_id = p_id) LOOP
+            BEGIN APEX_MAIL.ADD_ATTACHMENT(p_mail_id => l_mail_id, p_attachment => f.file_blob,
+              p_filename => f.filename, p_mime_type => NVL(f.mime_type,'application/octet-stream')); EXCEPTION WHEN OTHERS THEN NULL; END;
+          END LOOP;
+        EXCEPTION WHEN OTHERS THEN NULL; END;
+      END IF;
+    END LOOP;
     COMMIT;
-    IF l_email IS NOT NULL AND l_notify = 'Y' THEN
-      l_url := REPLACE(booking_pkg.g_app_url, '/app', '') || '/act?t=' || l_token;
-      BEGIN
-        BEGIN APEX_UTIL.SET_SECURITY_GROUP_ID(APEX_UTIL.FIND_SECURITY_GROUP_ID('ARKIA')); EXCEPTION WHEN OTHERS THEN NULL; END;
-        l_mail_id := APEX_MAIL.SEND(p_to => l_email, p_from => booking_pkg.g_mail_from,
-          p_subj => CASE WHEN l_lang='EN' THEN 'Arkia — approval required, booking #'||p_id ELSE 'ארקיע — נדרש אישור, הזמנה #'||p_id END,
-          p_body => TO_CLOB((CASE WHEN l_lang='EN' THEN 'A quote was submitted and requires your approval.' ELSE 'התקבלה הצעת מחיר הממתינה לאישורך.' END)
-                    || CHR(10) || 'Approve: ' || l_url || CHR(10) || booking_pkg.g_app_url || '#b=' || p_id),
-          p_body_html => booking_pkg.booking_email_html(p_id, l_lang, l_url));
-        FOR f IN (SELECT filename, mime_type, file_blob FROM booking_files WHERE booking_id = p_id) LOOP
-          BEGIN APEX_MAIL.ADD_ATTACHMENT(p_mail_id => l_mail_id, p_attachment => f.file_blob,
-            p_filename => f.filename, p_mime_type => NVL(f.mime_type,'application/octet-stream')); EXCEPTION WHEN OTHERS THEN NULL; END;
-        END LOOP;
-        BEGIN APEX_MAIL.PUSH_QUEUE; EXCEPTION WHEN OTHERS THEN NULL; END;
-      EXCEPTION WHEN OTHERS THEN NULL; END;
-    END IF;
+    IF l_any THEN BEGIN APEX_MAIL.PUSH_QUEUE; EXCEPTION WHEN OTHERS THEN NULL; END; END IF;
   EXCEPTION WHEN OTHERS THEN NULL;   -- לא מפיל את הגשת ההצעה
   END notify_approver_quote;
 
@@ -697,8 +719,12 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
         UPDATE bookings SET low_cost = NVL(p_low_cost,'N') WHERE booking_id = p_id;
         booking_pkg.submit_quote(p_id, p_price, p_currency, p_trip, p_notes, l_uid);
         notify_approver_quote(p_id);   -- מייל למאשר עם כפתור אישור ישיר
-      WHEN 'approve'        THEN booking_pkg.approve(p_id, l_uid, p_notes);
-      WHEN 'reject'         THEN booking_pkg.reject(p_id, l_uid, p_reason);
+      WHEN 'approve'        THEN
+        IF NOT is_booking_approver(l_uid, p_id) THEN RETURN err('forbidden'); END IF;
+        booking_pkg.approve(p_id, l_uid, p_notes);
+      WHEN 'reject'         THEN
+        IF NOT is_booking_approver(l_uid, p_id) THEN RETURN err('forbidden'); END IF;
+        booking_pkg.reject(p_id, l_uid, p_reason);
       WHEN 'ticket'         THEN booking_pkg.ticket(p_id, p_pnr, p_ref, TO_DATE(p_tdate,'YYYY-MM-DD'), l_uid);
       WHEN 'request_cancel' THEN
         -- אישור ביטול ע"י הסוכן נדרש רק לאחר כרטוס. לפני כרטוס — ביטול מיידי.
@@ -944,21 +970,33 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
   EXCEPTION WHEN OTHERS THEN APEX_JSON.free_output; RETURN err(SQLERRM);
   END admin_dept_approvers;
 
-  -- קביעת המאשר של מחלקה (מחליף את הקיים). מקנה תפקיד APPROVER ומעדכן הזמנות פתוחות.
+  -- הוספת מאשר למחלקה (תומך בכמה מאשרים למחלקה). מקנה תפקיד APPROVER.
   FUNCTION admin_set_dept_approver (p_token VARCHAR2, p_dept_id NUMBER, p_user_id NUMBER) RETURN CLOB IS
     l_uid NUMBER := admin_guard(p_token); n PLS_INTEGER;
   BEGIN
-    DELETE FROM dept_approvers WHERE dept_id = p_dept_id;
-    IF p_user_id IS NOT NULL THEN
-      INSERT INTO dept_approvers (dept_id, approver_user_id) VALUES (p_dept_id, p_user_id);
-      SELECT COUNT(*) INTO n FROM user_roles WHERE user_id = p_user_id AND role_code = 'APPROVER';
-      IF n = 0 THEN INSERT INTO user_roles (user_id, role_code) VALUES (p_user_id, 'APPROVER'); END IF;
-      UPDATE bookings SET approver_id = p_user_id
-        WHERE dept_id = p_dept_id AND status NOT IN ('TICKETED','CANCELLED','REJECTED');
-    END IF;
+    IF p_user_id IS NULL THEN RETURN err('no_user'); END IF;
+    SELECT COUNT(*) INTO n FROM dept_approvers WHERE dept_id = p_dept_id AND approver_user_id = p_user_id;
+    IF n = 0 THEN INSERT INTO dept_approvers (dept_id, approver_user_id) VALUES (p_dept_id, p_user_id); END IF;
+    SELECT COUNT(*) INTO n FROM user_roles WHERE user_id = p_user_id AND role_code = 'APPROVER';
+    IF n = 0 THEN INSERT INTO user_roles (user_id, role_code) VALUES (p_user_id, 'APPROVER'); END IF;
+    -- אם להזמנות פתוחות של המחלקה אין עדיין מאשר משויך — משייכים את המאשר הזה
+    UPDATE bookings SET approver_id = p_user_id
+      WHERE dept_id = p_dept_id AND approver_id IS NULL AND status NOT IN ('TICKETED','CANCELLED','REJECTED');
     COMMIT; RETURN '{"ok":true}';
   EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
   END admin_set_dept_approver;
+
+  -- הסרת מאשר ממחלקה
+  FUNCTION admin_del_dept_approver (p_token VARCHAR2, p_dept_id NUMBER, p_user_id NUMBER) RETURN CLOB IS
+    l_uid NUMBER := admin_guard(p_token);
+  BEGIN
+    DELETE FROM dept_approvers WHERE dept_id = p_dept_id AND approver_user_id = p_user_id;
+    -- הזמנות פתוחות ששויכו למאשר שהוסר — מאפסים כדי שיחזרו לבריכת מאשרי המחלקה
+    UPDATE bookings SET approver_id = NULL
+      WHERE dept_id = p_dept_id AND approver_id = p_user_id AND status NOT IN ('TICKETED','CANCELLED','REJECTED');
+    COMMIT; RETURN '{"ok":true}';
+  EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
+  END admin_del_dept_approver;
 
   -- מחיקת משתמש. חסום אם למשתמש יש הזמנות מקושרות (FK) — מחזיר שגיאה ברורה.
   FUNCTION admin_delete_user (p_token VARCHAR2, p_user_id NUMBER) RETURN CLOB IS
@@ -1269,6 +1307,12 @@ BEGIN
   ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/dept_approver/set', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
     p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_set_dept_approver(:token, :dept_id, :user_id)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
+
+  -- admin/dept_approver/del (POST = הסרת מאשר ממחלקה)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'admin/dept_approver/del');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/dept_approver/del', p_method=>'POST',
+    p_source_type=>ORDS.source_type_plsql,
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_del_dept_approver(:token, :dept_id, :user_id)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
 
   COMMIT;
 END;

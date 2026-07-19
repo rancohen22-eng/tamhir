@@ -146,7 +146,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-19.11';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.12';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight.
@@ -201,7 +201,7 @@ const T = {
     del:"מחק",delUser:"מחיקת משתמש",confirmDel:"למחוק את המשתמש?",loginLog:"לוג כניסות",time:"זמן",cancelBooking:"בטל הזמנה",
     emailNotif:"התראות במייל",emailOn:"מקבל התראות במייל",emailOff:"התראות מייל כבויות",
     R_INITIATOR:"יוזם",R_APPROVER:"מאשר",R_AGENT:"סוכן",R_FINANCE:"פיננס",R_ADMIN:"מנהל מערכת",
-    deptApprovers:"מאשר לפי מחלקה",pickUser:"בחר מאשר",noApprover:"— לא הוגדר —",
+    deptApprovers:"מאשרים לפי מחלקה",deptApproversHint:"אפשר להגדיר כמה מאשרים למחלקה — כולם יקבלו התראה וכל אחד יכול לאשר.",pickUser:"בחר מאשר",noApprover:"— לא הוגדר —",
     lowCost:"LOW COST",lowCostQ:"טיסת LOW COST?",urgent:"דחוף",urgentQuote:"הצעת מחיר דחופה",
     attachReq:"צרף קובץ (אקסל/PDF, רשות)",usage:"בקרת שימוש",storage:"אחסון",emailsMo:"מיילים החודש",send:"שלח",
     emailsUnit:"מיילים",usageNote:"נתוני צריכה מול מכסות התוכנית החינמית של Oracle (250GB אחסון · 3,000 מיילים בחודש).",attachedFile:"קובץ מצורף",
@@ -232,7 +232,7 @@ const T = {
     delUser:"Delete user",confirmDel:"Delete this user?",loginLog:"Login log",time:"Time",cancelBooking:"Cancel booking",
     emailNotif:"Email notifications",emailOn:"Email notifications on",emailOff:"Email notifications off",
     R_INITIATOR:"Initiator",R_APPROVER:"Approver",R_AGENT:"Agent",R_FINANCE:"Finance",R_ADMIN:"Admin",
-    deptApprovers:"Approver per department",pickUser:"Choose approver",noApprover:"— not set —",
+    deptApprovers:"Approvers per department",deptApproversHint:"A department can have several approvers — all are notified and any of them can approve.",pickUser:"Choose approver",noApprover:"— not set —",
     lowCost:"LOW COST",lowCostQ:"Low-cost flight?",urgent:"URGENT",urgentQuote:"Urgent quote",
     attachReq:"Attach file (Excel/PDF, optional)",usage:"Usage",storage:"Storage",emailsMo:"Emails this month",send:"Send",
     emailsUnit:"emails",usageNote:"Consumption vs. Oracle free-tier quotas (250GB storage · 3,000 emails/month).",attachedFile:"Attached file",
@@ -465,7 +465,7 @@ async function renderAdmin(app){
   const apr=await api('admin/airports',{token:SES.token});
   const airports=apr.ok?(apr.airports||[]):[];
   const dar=await api('admin/dept_approvers',{token:SES.token});
-  const daMap={}; (dar.ok?(dar.approvers||[]):[]).forEach(a=>{ if(!daMap[a.dept_id]) daMap[a.dept_id]={user_id:a.user_id,name:a.name}; });
+  const daMap={}; (dar.ok?(dar.approvers||[]):[]).forEach(a=>{ (daMap[a.dept_id]=daMap[a.dept_id]||[]).push({user_id:a.user_id,name:a.name}); });
   const usg=await api('admin/usage',{token:SES.token});
   const usage=usg.ok?usg:null;
   const deptOpts=BOOT.departments.map(d=>`<option value="${d.id}">${esc(deptName(d))}</option>`).join('');
@@ -487,15 +487,20 @@ async function renderAdmin(app){
     </div><div id="ad_err" style="color:var(--danger);font-size:13px"></div>
   </div>
   <div class="card"><h2>${t('deptApprovers')}</h2>
-    <div class="tablewrap"><table><thead><tr><th>${t('dept')}</th><th>${t('R_APPROVER')}</th><th></th></tr></thead>
+    <p class="muted" style="font-size:12px;margin:0 0 8px">${t('deptApproversHint')}</p>
+    <div class="tablewrap"><table><thead><tr><th>${t('dept')}</th><th>${t('R_APPROVER')}</th><th>${t('add')}</th></tr></thead>
     <tbody>${BOOT.departments.map(d=>{
-      const cur=daMap[d.id];
-      const opts=users.filter(u=>!(u.roles||'').split(',').includes('AGENT'))
-        .map(u=>`<option value="${u.id}" ${cur&&cur.user_id===u.id?'selected':''}>${esc(u.full_name)}</option>`).join('');
+      const cur=daMap[d.id]||[];
+      const curIds=cur.map(a=>a.user_id);
+      const opts=users.filter(u=>!(u.roles||'').split(',').includes('AGENT') && !curIds.includes(u.id))
+        .map(u=>`<option value="${u.id}">${esc(u.full_name)}</option>`).join('');
+      const chips=cur.length?cur.map(a=>`<span class="pill" style="margin:2px">${esc(a.name)}
+          <a onclick="delDeptApprover(${d.id},${a.user_id})" style="cursor:pointer;color:var(--danger);font-weight:800;margin-inline-start:4px">✕</a></span>`).join(' ')
+        :`<span class="muted">${t('noApprover')}</span>`;
       return `<tr><td>${esc(deptName(d))}</td>
-        <td>${cur?esc(cur.name):`<span class="muted">${t('noApprover')}</span>`}</td>
+        <td>${chips}</td>
         <td><div class="rowflex" style="margin:0"><div><select id="da_${d.id}" class="fld" style="margin:0"><option value="">${t('pickUser')}</option>${opts}</select></div>
-          <div style="flex:0"><button class="btn sm" onclick="setDeptApprover(${d.id})">${t('save')}</button></div></div></td></tr>`;
+          <div style="flex:0"><button class="btn sm" onclick="setDeptApprover(${d.id})">${t('add')}</button></div></div></td></tr>`;
     }).join('')}</tbody></table></div>
     <div id="da_err" style="color:var(--danger);font-size:13px"></div>
   </div>
@@ -599,7 +604,12 @@ async function addDept(){
 }
 async function setDeptApprover(deptId){
   const uid=document.getElementById('da_'+deptId).value;
-  spin(true); const r=await api('admin/dept_approver/set',{token:SES.token,dept_id:deptId,user_id:uid||''}); spin(false);
+  if(!uid){ document.getElementById('da_err').textContent=t('pickUser'); return; }
+  spin(true); const r=await api('admin/dept_approver/set',{token:SES.token,dept_id:deptId,user_id:uid}); spin(false);
+  if(!r.ok){ document.getElementById('da_err').textContent=r.error; return; } render();
+}
+async function delDeptApprover(deptId,uid){
+  spin(true); const r=await api('admin/dept_approver/del',{token:SES.token,dept_id:deptId,user_id:uid}); spin(false);
   if(!r.ok){ document.getElementById('da_err').textContent=r.error; return; } render();
 }
 async function addUser(){
@@ -945,7 +955,7 @@ function canEdit(b){
   if(['TICKETED','CANCELLED','REJECTED'].includes(b.status)) return false;
   if(hasRole('ADMIN')) return true;
   if(b.initiator_id===SES.user.id) return true;
-  if(hasRole('APPROVER') && (b.approver_id===SES.user.id || SES.user.dept_id===b.dept_id)) return true;
+  if(b.can_approve==='Y') return true;
   return false;
 }
 function renderEdit(app,b){
@@ -987,7 +997,7 @@ async function saveEdit(id){
 function actionsHtml(b){
   const isAgent = hasRole('AGENT') && SES.agent_id && b.agent_id===SES.agent_id;
   const canQuote = hasRole('AGENT') && SES.agent_id && (b.agent_id===SES.agent_id || !b.agent_id);
-  const isApprover = hasRole('APPROVER') && (b.approver_id===SES.user.id || SES.user.dept_id===b.dept_id);
+  const isApprover = b.can_approve==='Y';
   const isInitiator = b.initiator_id===SES.user.id;
   let h='';
   if(b.status==='AWAITING_QUOTE'&&canQuote) h+=`<button class="btn" onclick="quoteForm(${b.id},'${b.currency}')">${t('submitQuote')}</button>`;

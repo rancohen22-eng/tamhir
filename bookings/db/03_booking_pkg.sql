@@ -298,13 +298,11 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
         END IF;
 
       ELSIF t.recipient_role = 'APPROVER' THEN
-        IF l_row.approver_id IS NOT NULL THEN
-          push(l_row.approver_id, p_new_status, p_booking_id, t.subject_he, t.subject_en, t.msg_he, t.msg_en);
-        ELSE
-          FOR u IN (SELECT approver_user_id AS uid FROM dept_approvers WHERE dept_id = l_row.dept_id) LOOP
-            push(u.uid, p_new_status, p_booking_id, t.subject_he, t.subject_en, t.msg_he, t.msg_en);
-          END LOOP;
-        END IF;
+        -- כל מאשרי המחלקה + המאשר המשויך (אם קיים), ללא כפילויות
+        FOR u IN (SELECT approver_user_id AS uid FROM dept_approvers WHERE dept_id = l_row.dept_id
+                  UNION SELECT l_row.approver_id FROM dual WHERE l_row.approver_id IS NOT NULL) LOOP
+          push(u.uid, p_new_status, p_booking_id, t.subject_he, t.subject_en, t.msg_he, t.msg_en);
+        END LOOP;
       END IF;
     END LOOP;
   END change_status;
