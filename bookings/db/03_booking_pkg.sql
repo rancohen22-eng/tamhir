@@ -132,12 +132,12 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
     END;
   BEGIN
     SELECT * INTO r FROM bookings WHERE booking_id = p_booking_id;
-    BEGIN SELECT CASE WHEN l_en THEN name_en ELSE name_he END INTO l_dep FROM departments WHERE dept_id = r.dept_id; EXCEPTION WHEN OTHERS THEN l_dep := NULL; END;
+    BEGIN SELECT CASE WHEN UPPER(p_lang)='EN' THEN name_en ELSE name_he END INTO l_dep FROM departments WHERE dept_id = r.dept_id; EXCEPTION WHEN OTHERS THEN l_dep := NULL; END;
     BEGIN SELECT full_name INTO l_ini FROM app_users WHERE user_id = r.initiator_id; EXCEPTION WHEN OTHERS THEN l_ini := NULL; END;
     BEGIN SELECT agency_name INTO l_agn FROM agents WHERE agent_id = r.agent_id; EXCEPTION WHEN OTHERS THEN l_agn := NULL; END;
     BEGIN SELECT full_name INTO l_apr FROM app_users WHERE user_id = r.approver_id; EXCEPTION WHEN OTHERS THEN l_apr := NULL; END;
-    BEGIN SELECT CASE WHEN l_en THEN label_en ELSE label_he END INTO l_st FROM statuses WHERE status_code = r.status; EXCEPTION WHEN OTHERS THEN l_st := r.status; END;
-    BEGIN SELECT CASE WHEN l_en THEN name_en ELSE name_he END INTO l_wo FROM wet_operators WHERE operator_id = r.wet_operator_id; EXCEPTION WHEN OTHERS THEN l_wo := NULL; END;
+    BEGIN SELECT CASE WHEN UPPER(p_lang)='EN' THEN label_en ELSE label_he END INTO l_st FROM statuses WHERE status_code = r.status; EXCEPTION WHEN OTHERS THEN l_st := r.status; END;
+    BEGIN SELECT CASE WHEN UPPER(p_lang)='EN' THEN name_en ELSE name_he END INTO l_wo FROM wet_operators WHERE operator_id = r.wet_operator_id; EXCEPTION WHEN OTHERS THEN l_wo := NULL; END;
     IF r.origin_iata IS NOT NULL OR r.dest_iata IS NOT NULL THEN
       l_route := NVL(r.origin_iata,'?') || ' → ' || NVL(r.dest_iata,'?');
     END IF;
