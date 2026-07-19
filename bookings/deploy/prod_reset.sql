@@ -36,8 +36,10 @@ BEGIN
   DELETE FROM notifications;
   -- ההזמנות עצמן — גורר CASCADE ל-booking_files / booking_status_log / notifications
   DELETE FROM bookings;
+  -- יומן כניסות (היסטוריית התחברויות של תקופת הבדיקות)
+  BEGIN EXECUTE IMMEDIATE 'DELETE FROM login_log'; EXCEPTION WHEN OTHERS THEN NULL; END;
   COMMIT;
-  DBMS_OUTPUT.PUT_LINE('=== נמחקו כל נתוני ההזמנות ===');
+  DBMS_OUTPUT.PUT_LINE('=== נמחקו כל נתוני ההזמנות + יומן הכניסות ===');
 END;
 /
 
