@@ -104,6 +104,7 @@
     <img class="wm" src="/ords/arkia/api/assets/arkia" alt="Arkia" style="width:150px;max-width:60%;height:auto;display:block;margin:0 auto 8px" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'wm',textContent:'ARKIA'}))">
     <h1 id="lk_title">הזמנת טיסות מטלטוס</h1>
     <p>מערכת פנימית · ארקיע</p>
+    <button id="bioBtn" class="hidden" style="width:100%;margin-bottom:10px;background:var(--accent)">🔒 כניסה עם זיהוי פנים / אצבע</button>
     <input id="lk_user" class="fld" placeholder="שם משתמש" autocomplete="username" dir="ltr">
     <input id="lk_pw" class="fld" type="password" placeholder="סיסמה" autocomplete="current-password" dir="ltr">
     <button id="unlockBtn">כניסה</button>
@@ -145,7 +146,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-19.10';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.11';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight.
@@ -203,7 +204,8 @@ const T = {
     deptApprovers:"מאשר לפי מחלקה",pickUser:"בחר מאשר",noApprover:"— לא הוגדר —",
     lowCost:"LOW COST",lowCostQ:"טיסת LOW COST?",urgent:"דחוף",urgentQuote:"הצעת מחיר דחופה",
     attachReq:"צרף קובץ (אקסל/PDF, רשות)",usage:"בקרת שימוש",storage:"אחסון",emailsMo:"מיילים החודש",send:"שלח",
-    emailsUnit:"מיילים",usageNote:"נתוני צריכה מול מכסות התוכנית החינמית של Oracle (250GB אחסון · 3,000 מיילים בחודש).",attachedFile:"קובץ מצורף"},
+    emailsUnit:"מיילים",usageNote:"נתוני צריכה מול מכסות התוכנית החינמית של Oracle (250GB אחסון · 3,000 מיילים בחודש).",attachedFile:"קובץ מצורף",
+    bioLogin:"כניסה עם זיהוי פנים/אצבע",bioOn:"מופעל (לחצו לביטול)",bioOff:"הפעל"},
   en:{title:"Flight Booking by Teltos",logout:"Logout",bookings:"Bookings",newB:"New Booking",notifications:"Notifications",
     dept:"Department",status:"Status",initiator:"Initiator",agent:"Agent",approver:"Approver",openDate:"Open Date",
     departure:"Departure",ticketingDate:"Ticketing Date",price:"Price",currency:"Currency",pnr:"PNR",uref:"Unique Ref",
@@ -233,7 +235,8 @@ const T = {
     deptApprovers:"Approver per department",pickUser:"Choose approver",noApprover:"— not set —",
     lowCost:"LOW COST",lowCostQ:"Low-cost flight?",urgent:"URGENT",urgentQuote:"Urgent quote",
     attachReq:"Attach file (Excel/PDF, optional)",usage:"Usage",storage:"Storage",emailsMo:"Emails this month",send:"Send",
-    emailsUnit:"emails",usageNote:"Consumption vs. Oracle free-tier quotas (250GB storage · 3,000 emails/month).",attachedFile:"Attached file"}
+    emailsUnit:"emails",usageNote:"Consumption vs. Oracle free-tier quotas (250GB storage · 3,000 emails/month).",attachedFile:"Attached file",
+    bioLogin:"Face / fingerprint login",bioOn:"Enabled (tap to disable)",bioOff:"Enable"}
 };
 function t(k){ return (T[VIEW.lang]||T.he)[k]||k; }
 function stLabel(code){ const s=STMAP[code]; return s?(VIEW.lang==='en'?s.en:s.he):code; }
@@ -251,10 +254,8 @@ function isACMI(deptId){ const d=(BOOT.departments||[]).find(x=>x.id===deptId); 
 const SKEY='arkia_session';
 function saveSession(){ try{ localStorage.setItem(SKEY, JSON.stringify(SES)); }catch(e){} }
 function clearSession(){ try{ localStorage.removeItem(SKEY); }catch(e){} }
-// טוען bootstrap עם הטוקן הנוכחי ומציג את האפליקציה. מחזיר false אם הטוקן פג.
-async function enterApp(){
-  const boot=await api('bootstrap',{token:SES.token});
-  if(!boot.ok) return false;
+// מציג את האפליקציה לאחר שהתקבל bootstrap תקין.
+function applyBoot(boot){
   BOOT=boot; STMAP={}; (boot.statuses||[]).forEach(s=>STMAP[s.code]={he:s.he,en:s.en,terminal:s.terminal});
   APMAP={}; (boot.airports||[]).forEach(a=>APMAP[a.iata]={name_he:a.name_he,name_en:a.name_en});
   buildAirportList();
@@ -262,7 +263,13 @@ async function enterApp(){
   if(PENDING_BID){ VIEW.bookingId=PENDING_BID; PENDING_BID=null; try{history.replaceState(null,'',location.pathname);}catch(e){} }
   document.getElementById('lock').classList.add('hidden');
   document.getElementById('appwrap').classList.remove('hidden');
-  applyLang(); await refreshUnread(); render();
+  applyLang();
+}
+// טוען bootstrap עם הטוקן הנוכחי ומציג את האפליקציה. מחזיר false אם הטוקן פג/נכשל.
+async function enterApp(){
+  const boot=await api('bootstrap',{token:SES.token});
+  if(!boot.ok) return false;
+  applyBoot(boot); await refreshUnread(); render();
   return true;
 }
 async function doLogin(){
@@ -282,15 +289,81 @@ async function doLogin(){
 function logout(){ clearSession(); SES=null; document.getElementById('appwrap').classList.add('hidden');
   document.getElementById('lock').classList.remove('hidden');
   document.getElementById('lk_user').value=''; document.getElementById('lk_pw').value=''; document.getElementById('lockErr').textContent=''; }
-// שחזור סשן בטעינת העמוד (מובייל: להישאר מחובר)
+// מנסה לשחזר את הסשן מול השרת, עם ניסיונות חוזרים. קריטי: מוחקים את הטוקן
+// רק אם השרת אומר במפורש שהוא פג — לא על תקלת רשת (הפעלה קרה של ה-PWA).
+async function restoreSession(){
+  for(let attempt=0; attempt<4; attempt++){
+    let boot; try{ boot=await api('bootstrap',{token:SES.token}); }catch(e){ boot={ok:false,error:'network_error'}; }
+    if(boot.ok){ applyBoot(boot); await refreshUnread(); render(); return true; }
+    // טוקן פג/לא תקף באמת → התנתקות אמיתית
+    if(/invalid_or_expired_token|20401/.test(boot.error||'')){ clearSession(); SES=null; return false; }
+    // תקלת רשת רגעית → לא מוחקים את הטוקן; ממתינים ומנסים שוב
+    await new Promise(r=>setTimeout(r, 900*(attempt+1)));
+  }
+  return false; // אין רשת כרגע — הסשן נשמר, המשתמש יכול לנסות שוב
+}
+
+// שחזור סשן בטעינת העמוד (מובייל: להישאר מחובר, עם אפשרות זיהוי ביומטרי)
 async function tryRestore(){
-  // חשוב: לא מציגים ספינר ולא חוסמים את מסך ההתחברות בזמן השחזור.
-  // אם הסשן תקף — enterApp יחליף למסך האפליקציה; אם לא/נתקע — מסך ההתחברות נשאר שמיש.
   let s=null; try{ s=JSON.parse(localStorage.getItem(SKEY)||'null'); }catch(e){}
   if(!(s && s.token && s.user)) return;
   SES=s; VIEW.lang=(s.user.pref_lang||'HE').toLowerCase();
-  let ok=false; try{ ok=await enterApp(); }catch(e){ ok=false; }
-  if(!ok){ clearSession(); SES=null; }
+  if(bioEnabled() && bioSupported()){
+    // מציגים כפתור פתיחה ביומטרי ומפעילים אותו אוטומטית פעם אחת
+    const b=document.getElementById('bioBtn'); b.classList.remove('hidden'); b.onclick=bioUnlockAndEnter;
+    bioUnlockAndEnter();
+    return;
+  }
+  await restoreSession();
+}
+
+// אם אין רשת בהפעלה קרה — לנסות שוב כשחוזרים לחזית/כשיש רשת
+window.addEventListener('online', ()=>{ if(SES && !document.getElementById('appwrap').classList.contains('hidden')) return; if(SES) restoreSession(); });
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && SES && document.getElementById('appwrap').classList.contains('hidden') && !bioEnabled()) restoreSession(); });
+
+/* ── זיהוי ביומטרי (WebAuthn platform authenticator) — נעילת פתיחה מקומית ── */
+const BKEY='arkia_bio';
+function bioSupported(){ return !!(window.PublicKeyCredential && navigator.credentials && location.protocol==='https:'); }
+function bioCfg(){ try{ return JSON.parse(localStorage.getItem(BKEY)||'null'); }catch(e){ return null; } }
+function bioEnabled(){ const c=bioCfg(); return !!(c && c.credId); }
+function _b64uToBuf(s){ s=String(s).replace(/-/g,'+').replace(/_/g,'/'); const pad=s.length%4?'='.repeat(4-s.length%4):''; const bin=atob(s+pad); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i); return u.buffer; }
+function _bufToB64u(b){ const u=new Uint8Array(b); let s=''; for(let i=0;i<u.length;i++)s+=String.fromCharCode(u[i]); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+// הפעלה (מתוך מסך ההתראות/הגדרות, לאחר התחברות)
+async function bioRegister(){
+  if(!bioSupported()){ alert('הדפדפן/מכשיר אינו תומך בזיהוי ביומטרי'); return; }
+  try{
+    const uid=String((SES.user&&(SES.user.username||SES.user.full_name))||'user');
+    const cred=await navigator.credentials.create({ publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)),
+      rp:{ name:'Teltos Bookings' },
+      user:{ id:new TextEncoder().encode(uid).slice(0,64), name:uid, displayName:uid },
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{ authenticatorAttachment:'platform', userVerification:'required', residentKey:'preferred' },
+      timeout:60000, attestation:'none'
+    }});
+    localStorage.setItem(BKEY, JSON.stringify({ credId:_bufToB64u(cred.rawId) }));
+    alert('זיהוי ביומטרי הופעל ✓ בכניסה הבאה תתבקשו לאמת בפנים/אצבע.');
+  }catch(e){ alert('ההפעלה בוטלה או נכשלה'); }
+  render();
+}
+function bioDisable(){ localStorage.removeItem(BKEY); render(); }
+// אימות פתיחה — מחזיר true אם עבר
+async function bioVerify(){
+  const c=bioCfg(); if(!(c && c.credId)) return false;
+  try{
+    await navigator.credentials.get({ publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials:[{ type:'public-key', id:_b64uToBuf(c.credId) }],
+      userVerification:'required', timeout:60000
+    }});
+    return true;
+  }catch(e){ return false; }
+}
+async function bioUnlockAndEnter(){
+  const ok=await bioVerify();
+  if(!ok){ document.getElementById('lockErr').textContent='האימות הביומטרי בוטל — אפשר להיכנס עם סיסמה'; return; }
+  document.getElementById('lockErr').textContent='';
+  await restoreSession();
 }
 
 function buildAirportList(){
@@ -1001,6 +1074,12 @@ async function renderNotifications(app){
       <span>${t('emailNotif')}:</span>
       <button class="btn ${nOn?'ok':'ghost'} sm" onclick="toggleNotify()">${nOn?t('emailOn'):t('emailOff')}</button>
     </div>
+    ${bioSupported()?`<div style="margin-top:8px;display:flex;align-items:center;gap:10px;font-size:13px">
+      <span>${t('bioLogin')}:</span>
+      ${bioEnabled()
+        ? `<button class="btn ok sm" onclick="bioDisable()">${t('bioOn')}</button>`
+        : `<button class="btn ghost sm" onclick="bioRegister()">${t('bioOff')}</button>`}
+    </div>`:''}
     <div style="margin-top:10px">${list.map(n=>`<div class="notif ${n.is_read==='N'?'unread':''}" onclick="openFromNotif(${n.booking_id||'null'})">
       <span>🔔</span><div style="flex:1">${esc(n.message)}<div class="t">${n.at}</div></div></div>`).join('')||`<div class="muted">${t('noNotif')}</div>`}</div></div>`;
 }
