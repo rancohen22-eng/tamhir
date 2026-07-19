@@ -7,7 +7,7 @@
 <meta http-equiv="Cache-Control" content="no-store, max-age=0">
 <title>הזמנת טיסות מטלטוס · ארקיע</title>
 <!-- PWA: הוספה למסך הבית -->
-<link rel="manifest" href="/ords/arkia/api/assets/manifest">
+<link rel="manifest" href="/ords/arkia/api/assets/manifest?v=7">
 <meta name="theme-color" content="#123a86">
 <link rel="apple-touch-icon" href="/ords/arkia/api/assets/appicon">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -145,7 +145,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-19.7';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.8';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight.

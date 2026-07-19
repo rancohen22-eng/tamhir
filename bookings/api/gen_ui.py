@@ -43,7 +43,7 @@ self.addEventListener('fetch', function(e){
 MANIFEST = {
     "name": "הזמנת טיסות מטלטוס",
     "short_name": "הזמנות",
-    "start_url": "/ords/arkia/api/app",
+    "start_url": "/ords/arkia/api/app?pwa=1",
     "scope": "/ords/arkia/api/",
     "display": "standalone",
     "background_color": "#123a86",
