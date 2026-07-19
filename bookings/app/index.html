@@ -143,13 +143,15 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-19.3';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.4';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight
-  const r = await fetch(API + path, { method:'POST', body:new URLSearchParams(params||{}) });
-  const txt = await r.text();
-  try { return JSON.parse(txt); } catch(e){ return {ok:false, error:'bad_response: '+txt.slice(0,200)}; }
+  try {
+    const r = await fetch(API + path, { method:'POST', body:new URLSearchParams(params||{}) });
+    const txt = await r.text();
+    try { return JSON.parse(txt); } catch(e){ return {ok:false, error:'bad_response: '+txt.slice(0,200)}; }
+  } catch(e){ return {ok:false, error:'network_error'}; }   // לעולם לא זורק — כדי שהספינר לא ייתקע
 }
 function spin(on){ document.getElementById('spin').classList.toggle('hidden', !on); }
 
@@ -269,8 +271,11 @@ function logout(){ clearSession(); SES=null; document.getElementById('appwrap').
 // שחזור סשן בטעינת העמוד (מובייל: להישאר מחובר)
 async function tryRestore(){
   let s=null; try{ s=JSON.parse(localStorage.getItem(SKEY)||'null'); }catch(e){}
-  if(s && s.token && s.user){ SES=s; VIEW.lang=(s.user.pref_lang||'HE').toLowerCase();
-    spin(true); const ok=await enterApp(); spin(false); if(!ok){ clearSession(); SES=null; } }
+  if(!(s && s.token && s.user)) return;
+  SES=s; VIEW.lang=(s.user.pref_lang||'HE').toLowerCase();
+  spin(true);
+  let ok=false; try{ ok=await enterApp(); }catch(e){ ok=false; } finally{ spin(false); }
+  if(!ok){ clearSession(); SES=null; }   // סשן לא תקף → חוזרים למסך התחברות שמיש
 }
 
 function buildAirportList(){
