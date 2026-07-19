@@ -107,7 +107,6 @@
     <input id="lk_pw" class="fld" type="password" placeholder="סיסמה" autocomplete="current-password" dir="ltr">
     <button id="unlockBtn">כניסה</button>
     <div id="lockErr"></div>
-    <div class="demo"><b>דמו</b> (סיסמה <code>Arkia2026!</code>): admin · initiator_acmi · approver_acmi · finance · teltos</div>
     <div style="margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:11px;color:var(--muted)">
       <span>בשיתוף</span>
       <img src="/ords/arkia/api/assets/teltos" alt="Teltos" style="height:20px;vertical-align:middle" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'טלטוס',style:'color:var(--brand)'}))">
@@ -144,7 +143,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-19.2';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.3';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight
