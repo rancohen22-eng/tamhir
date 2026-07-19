@@ -273,6 +273,9 @@ CREATE OR REPLACE PACKAGE api_pkg AS
   FUNCTION  set_notify    (p_token VARCHAR2, p_on VARCHAR2) RETURN CLOB;
   -- אישור/פעולה מתוך המייל (טוקן חד-פעמי) — מחזיר עמוד HTML
   FUNCTION  act_token     (p_t VARCHAR2) RETURN BLOB;
+  -- מאשר לכל מחלקה
+  FUNCTION  admin_dept_approvers (p_token VARCHAR2) RETURN CLOB;
+  FUNCTION  admin_set_dept_approver (p_token VARCHAR2, p_dept_id NUMBER, p_user_id NUMBER) RETURN CLOB;
 END api_pkg;
 /
 
@@ -870,6 +873,39 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
   EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
   END admin_create_wetop;
 
+  -- מיפוי מחלקה → מאשר נוכחי
+  FUNCTION admin_dept_approvers (p_token VARCHAR2) RETURN CLOB IS
+    l_uid NUMBER := admin_guard(p_token);
+  BEGIN
+    APEX_JSON.initialize_clob_output;
+    APEX_JSON.open_object; APEX_JSON.write('ok', TRUE); APEX_JSON.open_array('approvers');
+    FOR r IN (SELECT da.dept_id, da.approver_user_id uid, u.full_name nm
+                FROM dept_approvers da JOIN app_users u ON u.user_id = da.approver_user_id
+                ORDER BY da.dept_id) LOOP
+      APEX_JSON.open_object; APEX_JSON.write('dept_id', r.dept_id); APEX_JSON.write('user_id', r.uid);
+      APEX_JSON.write('name', r.nm); APEX_JSON.close_object;
+    END LOOP;
+    APEX_JSON.close_array; APEX_JSON.close_object;
+    RETURN APEX_JSON.get_clob_output;
+  EXCEPTION WHEN OTHERS THEN APEX_JSON.free_output; RETURN err(SQLERRM);
+  END admin_dept_approvers;
+
+  -- קביעת המאשר של מחלקה (מחליף את הקיים). מקנה תפקיד APPROVER ומעדכן הזמנות פתוחות.
+  FUNCTION admin_set_dept_approver (p_token VARCHAR2, p_dept_id NUMBER, p_user_id NUMBER) RETURN CLOB IS
+    l_uid NUMBER := admin_guard(p_token); n PLS_INTEGER;
+  BEGIN
+    DELETE FROM dept_approvers WHERE dept_id = p_dept_id;
+    IF p_user_id IS NOT NULL THEN
+      INSERT INTO dept_approvers (dept_id, approver_user_id) VALUES (p_dept_id, p_user_id);
+      SELECT COUNT(*) INTO n FROM user_roles WHERE user_id = p_user_id AND role_code = 'APPROVER';
+      IF n = 0 THEN INSERT INTO user_roles (user_id, role_code) VALUES (p_user_id, 'APPROVER'); END IF;
+      UPDATE bookings SET approver_id = p_user_id
+        WHERE dept_id = p_dept_id AND status NOT IN ('TICKETED','CANCELLED','REJECTED');
+    END IF;
+    COMMIT; RETURN '{"ok":true}';
+  EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
+  END admin_set_dept_approver;
+
   -- מחיקת משתמש. חסום אם למשתמש יש הזמנות מקושרות (FK) — מחזיר שגיאה ברורה.
   FUNCTION admin_delete_user (p_token VARCHAR2, p_user_id NUMBER) RETURN CLOB IS
     l_uid NUMBER := admin_guard(p_token);
@@ -1121,6 +1157,18 @@ BEGIN
   ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'notify/set', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
     p_source=>q'[BEGIN api_pkg.emit(api_pkg.set_notify(:token, :on)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
+
+  -- admin/dept_approvers (POST = מיפוי מחלקה→מאשר)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'admin/dept_approvers');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/dept_approvers', p_method=>'POST',
+    p_source_type=>ORDS.source_type_plsql,
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_dept_approvers(:token)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
+
+  -- admin/dept_approver/set (POST)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'admin/dept_approver/set');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/dept_approver/set', p_method=>'POST',
+    p_source_type=>ORDS.source_type_plsql,
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_set_dept_approver(:token, :dept_id, :user_id)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
 
   COMMIT;
 END;

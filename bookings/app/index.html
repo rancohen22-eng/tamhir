@@ -135,7 +135,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-18.7';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-18.8';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight
@@ -181,7 +181,8 @@ const T = {
     resetEmailed:"נשלח מייל עם סיסמה זמנית למשתמש:",sendToAgents:"שלח לכל הסוכנים",chooseDest:"בחר יעד",openPool:"פתוחה לכל הסוכנים",
     del:"מחק",delUser:"מחיקת משתמש",confirmDel:"למחוק את המשתמש?",loginLog:"לוג כניסות",time:"זמן",cancelBooking:"בטל הזמנה",
     emailNotif:"התראות במייל",emailOn:"מקבל התראות במייל",emailOff:"התראות מייל כבויות",
-    R_INITIATOR:"יוזם",R_APPROVER:"מאשר",R_AGENT:"סוכן",R_FINANCE:"פיננס",R_ADMIN:"מנהל מערכת"},
+    R_INITIATOR:"יוזם",R_APPROVER:"מאשר",R_AGENT:"סוכן",R_FINANCE:"פיננס",R_ADMIN:"מנהל מערכת",
+    deptApprovers:"מאשר לפי מחלקה",pickUser:"בחר מאשר",noApprover:"— לא הוגדר —"},
   en:{title:"Flight Booking by Teltos",logout:"Logout",bookings:"Bookings",newB:"New Booking",notifications:"Notifications",
     dept:"Department",status:"Status",initiator:"Initiator",agent:"Agent",approver:"Approver",openDate:"Open Date",
     departure:"Departure",ticketingDate:"Ticketing Date",price:"Price",currency:"Currency",pnr:"PNR",uref:"Unique Ref",
@@ -207,7 +208,8 @@ const T = {
     resetEmailed:"A temporary password was emailed to the user:",sendToAgents:"Send to all agents",chooseDest:"Choose destination",openPool:"Open to all agents",
     delUser:"Delete user",confirmDel:"Delete this user?",loginLog:"Login log",time:"Time",cancelBooking:"Cancel booking",
     emailNotif:"Email notifications",emailOn:"Email notifications on",emailOff:"Email notifications off",
-    R_INITIATOR:"Initiator",R_APPROVER:"Approver",R_AGENT:"Agent",R_FINANCE:"Finance",R_ADMIN:"Admin"}
+    R_INITIATOR:"Initiator",R_APPROVER:"Approver",R_AGENT:"Agent",R_FINANCE:"Finance",R_ADMIN:"Admin",
+    deptApprovers:"Approver per department",pickUser:"Choose approver",noApprover:"— not set —"}
 };
 function t(k){ return (T[VIEW.lang]||T.he)[k]||k; }
 function stLabel(code){ const s=STMAP[code]; return s?(VIEW.lang==='en'?s.en:s.he):code; }
@@ -345,6 +347,8 @@ async function renderAdmin(app){
   const users=ADMIN_USERS;
   const apr=await api('admin/airports',{token:SES.token});
   const airports=apr.ok?(apr.airports||[]):[];
+  const dar=await api('admin/dept_approvers',{token:SES.token});
+  const daMap={}; (dar.ok?(dar.approvers||[]):[]).forEach(a=>{ if(!daMap[a.dept_id]) daMap[a.dept_id]={user_id:a.user_id,name:a.name}; });
   const deptOpts=BOOT.departments.map(d=>`<option value="${d.id}">${esc(deptName(d))}</option>`).join('');
   const roleOpts=ROLES.map(r=>`<option value="${r}">${r}</option>`).join('');
   app.innerHTML=`
@@ -357,6 +361,19 @@ async function renderAdmin(app){
       <div><input id="ad_en" class="fld" placeholder="Name (English)"></div>
       <div style="flex:0"><button class="btn sm" onclick="addDept()">${t('add')}</button></div>
     </div><div id="ad_err" style="color:var(--danger);font-size:13px"></div>
+  </div>
+  <div class="card"><h2>${t('deptApprovers')}</h2>
+    <div class="tablewrap"><table><thead><tr><th>${t('dept')}</th><th>${t('R_APPROVER')}</th><th></th></tr></thead>
+    <tbody>${BOOT.departments.map(d=>{
+      const cur=daMap[d.id];
+      const opts=users.filter(u=>!(u.roles||'').split(',').includes('AGENT'))
+        .map(u=>`<option value="${u.id}" ${cur&&cur.user_id===u.id?'selected':''}>${esc(u.full_name)}</option>`).join('');
+      return `<tr><td>${esc(deptName(d))}</td>
+        <td>${cur?esc(cur.name):`<span class="muted">${t('noApprover')}</span>`}</td>
+        <td><div class="rowflex" style="margin:0"><div><select id="da_${d.id}" class="fld" style="margin:0"><option value="">${t('pickUser')}</option>${opts}</select></div>
+          <div style="flex:0"><button class="btn sm" onclick="setDeptApprover(${d.id})">${t('save')}</button></div></div></td></tr>`;
+    }).join('')}</tbody></table></div>
+    <div id="da_err" style="color:var(--danger);font-size:13px"></div>
   </div>
   <div class="card"><h2>${t('users')}</h2>
     <div class="tablewrap"><table><thead><tr><th>username</th><th>${t('name')}</th><th>${t('email')}</th><th>${t('dept')}</th><th>${t('roles')}</th><th></th></tr></thead>
@@ -444,6 +461,11 @@ async function addDept(){
   if(!code||!he){ document.getElementById('ad_err').textContent=t('required2'); return; }
   spin(true); const r=await api('admin/dept/create',{token:SES.token,code:code,name_he:he,name_en:en}); await refreshBoot(); spin(false);
   if(!r.ok){ document.getElementById('ad_err').textContent=r.error; return; } render();
+}
+async function setDeptApprover(deptId){
+  const uid=document.getElementById('da_'+deptId).value;
+  spin(true); const r=await api('admin/dept_approver/set',{token:SES.token,dept_id:deptId,user_id:uid||''}); spin(false);
+  if(!r.ok){ document.getElementById('da_err').textContent=r.error; return; } render();
 }
 async function addUser(){
   const un=document.getElementById('au_un').value.trim(), fn=document.getElementById('au_fn').value.trim();
