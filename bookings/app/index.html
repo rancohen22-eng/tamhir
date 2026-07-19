@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Cache-Control" content="no-store, max-age=0">
 <title>הזמנת טיסות מטלטוס · ארקיע</title>
 <!-- PWA: הוספה למסך הבית -->
 <link rel="manifest" href="/ords/arkia/api/assets/manifest">
@@ -143,17 +144,22 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-19.4';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.5';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
-  // POST form-urlencoded = "simple request" → ללא CORS preflight
+  // POST form-urlencoded = "simple request" → ללא CORS preflight.
+  // timeout כדי שבקשה תקועה (מובייל) לא תשאיר את המסך חסום; לעולם לא זורק.
   try {
-    const r = await fetch(API + path, { method:'POST', body:new URLSearchParams(params||{}) });
+    const ctl = new AbortController();
+    const to = setTimeout(()=>ctl.abort(), 20000);
+    const r = await fetch(API + path, { method:'POST', body:new URLSearchParams(params||{}), signal:ctl.signal });
+    clearTimeout(to);
     const txt = await r.text();
     try { return JSON.parse(txt); } catch(e){ return {ok:false, error:'bad_response: '+txt.slice(0,200)}; }
-  } catch(e){ return {ok:false, error:'network_error'}; }   // לעולם לא זורק — כדי שהספינר לא ייתקע
+  } catch(e){ return {ok:false, error:'network_error'}; }
 }
 function spin(on){ document.getElementById('spin').classList.toggle('hidden', !on); }
+spin(false);   // ודא שאין ספינר חוסם בטעינה
 
 /* ── מצב ── */
 let SES = null;     // {token,user,roles,agent_id}
@@ -270,12 +276,13 @@ function logout(){ clearSession(); SES=null; document.getElementById('appwrap').
   document.getElementById('lk_user').value=''; document.getElementById('lk_pw').value=''; document.getElementById('lockErr').textContent=''; }
 // שחזור סשן בטעינת העמוד (מובייל: להישאר מחובר)
 async function tryRestore(){
+  // חשוב: לא מציגים ספינר ולא חוסמים את מסך ההתחברות בזמן השחזור.
+  // אם הסשן תקף — enterApp יחליף למסך האפליקציה; אם לא/נתקע — מסך ההתחברות נשאר שמיש.
   let s=null; try{ s=JSON.parse(localStorage.getItem(SKEY)||'null'); }catch(e){}
   if(!(s && s.token && s.user)) return;
   SES=s; VIEW.lang=(s.user.pref_lang||'HE').toLowerCase();
-  spin(true);
-  let ok=false; try{ ok=await enterApp(); }catch(e){ ok=false; } finally{ spin(false); }
-  if(!ok){ clearSession(); SES=null; }   // סשן לא תקף → חוזרים למסך התחברות שמיש
+  let ok=false; try{ ok=await enterApp(); }catch(e){ ok=false; }
+  if(!ok){ clearSession(); SES=null; }
 }
 
 function buildAirportList(){
