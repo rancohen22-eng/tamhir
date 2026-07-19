@@ -113,6 +113,7 @@
       <img src="/ords/arkia/api/assets/teltos" alt="Teltos" style="height:20px;vertical-align:middle" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'טלטוס',style:'color:var(--brand)'}))">
     </div>
   </div>
+  <div id="lk_build" style="margin-top:12px;font-size:11px;color:rgba(255,255,255,.7)"></div>
 </div>
 
 <div id="appwrap" class="hidden">
@@ -144,7 +145,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-19.5';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.6';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight.
@@ -160,6 +161,7 @@ async function api(path, params){
 }
 function spin(on){ document.getElementById('spin').classList.toggle('hidden', !on); }
 spin(false);   // ודא שאין ספינר חוסם בטעינה
+try{ document.getElementById('lk_build').textContent='build '+BUILD; }catch(e){}
 
 /* ── מצב ── */
 let SES = null;     // {token,user,roles,agent_id}
