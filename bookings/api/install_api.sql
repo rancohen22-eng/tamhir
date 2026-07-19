@@ -1034,8 +1034,22 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
     l_gb    NUMBER := 0;
     l_mails NUMBER := 0;
   BEGIN
-    BEGIN SELECT ROUND(NVL(SUM(bytes),0)/1024/1024/1024, 3) INTO l_gb FROM user_segments; EXCEPTION WHEN OTHERS THEN l_gb := 0; END;
-    BEGIN SELECT COUNT(*) INTO l_mails FROM apex_mail_log WHERE sent_on >= TRUNC(SYSDATE,'MM'); EXCEPTION WHEN OTHERS THEN l_mails := 0; END;
+    -- שאילתות דינמיות (EXECUTE IMMEDIATE) כדי שהחבילה תתקמפל גם אם View/עמודה חסרים בסביבה
+    BEGIN EXECUTE IMMEDIATE 'SELECT ROUND(NVL(SUM(bytes),0)/1024/1024/1024,3) FROM user_segments' INTO l_gb;
+    EXCEPTION WHEN OTHERS THEN l_gb := 0; END;
+    -- שם עמודת התאריך ב-APEX_MAIL_LOG משתנה בין גרסאות; מנסים כמה מועמדים ואז נופלים לספירה כוללת
+    BEGIN
+      DECLARE l_col VARCHAR2(30);
+      BEGIN
+        SELECT column_name INTO l_col FROM all_tab_columns
+         WHERE table_name = 'APEX_MAIL_LOG' AND column_name IN ('LOG_TIMESTAMP','SENT_ON','CREATED_ON','AGGREGATE_ON')
+         AND ROWNUM = 1;
+        EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM apex_mail_log WHERE '||l_col||' >= TRUNC(SYSDATE,''MM'')' INTO l_mails;
+      EXCEPTION WHEN OTHERS THEN
+        BEGIN EXECUTE IMMEDIATE 'SELECT COUNT(*) FROM apex_mail_log' INTO l_mails;
+        EXCEPTION WHEN OTHERS THEN l_mails := 0; END;
+      END;
+    END;
     APEX_JSON.initialize_clob_output;
     APEX_JSON.open_object;
       APEX_JSON.write('ok', TRUE);
