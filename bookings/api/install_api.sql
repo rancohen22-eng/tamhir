@@ -29,6 +29,8 @@ BEGIN
   try('ALTER TABLE bookings ADD (wet_operator_id NUMBER)');
   try('ALTER TABLE bookings ADD (origin_iata VARCHAR2(4))');
   try('ALTER TABLE bookings ADD (dest_iata VARCHAR2(4))');
+  try('ALTER TABLE bookings ADD (low_cost CHAR(1) DEFAULT ''N'')');   -- טיסת LOW COST (הסוכן מסמן בהצעה)
+  try('ALTER TABLE bookings ADD (urgent CHAR(1) DEFAULT ''N'')');     -- הצעה דחופה יזומה ע"י הסוכן
   -- העדפת התראות מייל לכל משתמש (Y=מקבל, N=כבוי)
   try('ALTER TABLE app_users ADD (notify_email CHAR(1) DEFAULT ''Y'')');
   -- לוג כניסות למערכת (התחברויות בלבד — לא פעולות)
@@ -251,7 +253,11 @@ CREATE OR REPLACE PACKAGE api_pkg AS
                           p_origin VARCHAR2, p_dest VARCHAR2) RETURN CLOB;
   FUNCTION  do_action    (p_token VARCHAR2, p_id NUMBER, p_action VARCHAR2,
                           p_price NUMBER, p_currency VARCHAR2, p_trip CLOB, p_notes VARCHAR2,
-                          p_pnr VARCHAR2, p_ref VARCHAR2, p_tdate VARCHAR2, p_reason VARCHAR2) RETURN CLOB;
+                          p_pnr VARCHAR2, p_ref VARCHAR2, p_tdate VARCHAR2, p_reason VARCHAR2,
+                          p_low_cost VARCHAR2 DEFAULT NULL) RETURN CLOB;
+  FUNCTION  agent_create_quote (p_token VARCHAR2, p_dept_id NUMBER, p_departure VARCHAR2, p_pax NUMBER,
+                          p_pref_time VARCHAR2, p_origin VARCHAR2, p_dest VARCHAR2, p_price NUMBER,
+                          p_currency VARCHAR2, p_trip CLOB, p_notes VARCHAR2, p_low_cost VARCHAR2) RETURN CLOB;
   FUNCTION  add_file     (p_token VARCHAR2, p_booking_id NUMBER, p_kind VARCHAR2,
                           p_filename VARCHAR2, p_mime VARCHAR2, p_data CLOB) RETURN CLOB;
   PROCEDURE get_file     (p_id NUMBER, o_blob OUT BLOB, o_mime OUT VARCHAR2, o_name OUT VARCHAR2);
@@ -278,6 +284,7 @@ CREATE OR REPLACE PACKAGE api_pkg AS
   -- מאשר לכל מחלקה
   FUNCTION  admin_dept_approvers (p_token VARCHAR2) RETURN CLOB;
   FUNCTION  admin_set_dept_approver (p_token VARCHAR2, p_dept_id NUMBER, p_user_id NUMBER) RETURN CLOB;
+  FUNCTION  admin_usage (p_token VARCHAR2) RETURN CLOB;
 END api_pkg;
 /
 
@@ -414,7 +421,7 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
              b.agent_id, ag.agency_name agn, TO_CHAR(b.departure_date,'YYYY-MM-DD') dep,
              TO_CHAR(b.open_date,'YYYY-MM-DD') opn, TO_CHAR(b.ticketing_date,'YYYY-MM-DD') tkt,
              b.price, b.currency_code cur, b.pnr, b.pax_count pax, b.pref_time prt,
-             b.origin_iata org, b.dest_iata dst, wo.name_he wohe, wo.name_en woen,
+             b.origin_iata org, b.dest_iata dst, b.low_cost lowc, b.urgent urg, wo.name_he wohe, wo.name_en woen,
              (SELECT u2.full_name FROM booking_status_log l2 JOIN app_users u2 ON u2.user_id=l2.action_by
                WHERE l2.booking_id=b.booking_id ORDER BY l2.action_at DESC FETCH FIRST 1 ROW ONLY) lub,
              TO_CHAR((SELECT MAX(l3.action_at) FROM booking_status_log l3 WHERE l3.booking_id=b.booking_id),'YYYY-MM-DD HH24:MI') luat
@@ -435,6 +442,7 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
         APEX_JSON.write('pax',b.pax); APEX_JSON.write('pref_time',b.prt);
         APEX_JSON.write('origin',b.org); APEX_JSON.write('dest',b.dst);
         APEX_JSON.write('wet_op_he',b.wohe); APEX_JSON.write('wet_op_en',NVL(b.woen,b.wohe));
+        APEX_JSON.write('low_cost',b.lowc); APEX_JSON.write('urgent',b.urg);
         APEX_JSON.write('updated_by',b.lub); APEX_JSON.write('updated_at',b.luat);
       APEX_JSON.close_object;
     END LOOP;
@@ -474,6 +482,7 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
         APEX_JSON.write('origin',r.origin_iata); APEX_JSON.write('dest',r.dest_iata);
         APEX_JSON.write('wet_op_id',r.wet_operator_id);
         APEX_JSON.write('wet_op_he',l_wohe); APEX_JSON.write('wet_op_en',NVL(l_woen,l_wohe));
+        APEX_JSON.write('low_cost',r.low_cost); APEX_JSON.write('urgent',r.urgent);
       APEX_JSON.close_object;
       APEX_JSON.open_array('files');
         FOR f IN (SELECT file_id,file_kind,filename,mime_type FROM booking_files WHERE booking_id=p_id ORDER BY file_id) LOOP
@@ -660,7 +669,8 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
 
   FUNCTION do_action (p_token VARCHAR2, p_id NUMBER, p_action VARCHAR2,
                       p_price NUMBER, p_currency VARCHAR2, p_trip CLOB, p_notes VARCHAR2,
-                      p_pnr VARCHAR2, p_ref VARCHAR2, p_tdate VARCHAR2, p_reason VARCHAR2) RETURN CLOB IS
+                      p_pnr VARCHAR2, p_ref VARCHAR2, p_tdate VARCHAR2, p_reason VARCHAR2,
+                      p_low_cost VARCHAR2 DEFAULT NULL) RETURN CLOB IS
     l_uid NUMBER := uid(p_token);
   BEGIN
     CASE p_action
@@ -668,6 +678,7 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
         -- מודל בריכה: הסוכן שמגיש את ההצעה משויך להזמנה (אם עדיין לא משויכת)
         UPDATE bookings SET agent_id = (SELECT MAX(agent_id) FROM agents WHERE user_id = l_uid)
          WHERE booking_id = p_id AND agent_id IS NULL;
+        UPDATE bookings SET low_cost = NVL(p_low_cost,'N') WHERE booking_id = p_id;
         booking_pkg.submit_quote(p_id, p_price, p_currency, p_trip, p_notes, l_uid);
         notify_approver_quote(p_id);   -- מייל למאשר עם כפתור אישור ישיר
       WHEN 'approve'        THEN booking_pkg.approve(p_id, l_uid, p_notes);
@@ -692,6 +703,30 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
     RETURN '{"ok":true}';
   EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
   END do_action;
+
+  -- הצעת מחיר דחופה — הסוכן יוזם הצעה ללא בקשה. נפתחת ישר ב-QUOTE_RECEIVED,
+  -- מסומנת urgent, ומופנית למאשר של המחלקה שנבחרה.
+  FUNCTION agent_create_quote (p_token VARCHAR2, p_dept_id NUMBER, p_departure VARCHAR2, p_pax NUMBER,
+                          p_pref_time VARCHAR2, p_origin VARCHAR2, p_dest VARCHAR2, p_price NUMBER,
+                          p_currency VARCHAR2, p_trip CLOB, p_notes VARCHAR2, p_low_cost VARCHAR2) RETURN CLOB IS
+    l_uid NUMBER := uid(p_token); l_agent NUMBER; l_id NUMBER;
+  BEGIN
+    IF has_role(l_uid,'AGENT') <> 'Y' THEN RETURN err('forbidden'); END IF;
+    SELECT MAX(agent_id) INTO l_agent FROM agents WHERE user_id = l_uid;
+    INSERT INTO bookings (dept_id, initiator_id, agent_id, approver_id, status, open_date, departure_date,
+                          price, currency_code, quote_notes, trip_details, pax_count, pref_time,
+                          origin_iata, dest_iata, low_cost, urgent)
+    VALUES (p_dept_id, l_uid, l_agent, booking_pkg.derive_approver(p_dept_id), 'QUOTE_RECEIVED', TRUNC(SYSDATE),
+            TO_DATE(p_departure,'YYYY-MM-DD'), p_price, NVL(p_currency,'USD'), p_notes, p_trip, NVL(p_pax,1),
+            p_pref_time, UPPER(p_origin), UPPER(p_dest), NVL(p_low_cost,'N'), 'Y')
+    RETURNING booking_id INTO l_id;
+    INSERT INTO booking_status_log (booking_id, from_status, to_status, action_by, note)
+    VALUES (l_id, NULL, 'QUOTE_RECEIVED', l_uid, 'הצעת מחיר דחופה (יזומה ע"י הסוכן)');
+    notify_approver_quote(l_id);
+    COMMIT;
+    RETURN '{"ok":true,"id":'||l_id||'}';
+  EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
+  END agent_create_quote;
 
   FUNCTION add_file (p_token VARCHAR2, p_booking_id NUMBER, p_kind VARCHAR2,
                      p_filename VARCHAR2, p_mime VARCHAR2, p_data CLOB) RETURN CLOB IS
@@ -993,6 +1028,26 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
   EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
   END admin_save_airport;
 
+  -- בקרת שימוש: נפח אחסון (GB, סכמת ARKIA) ומיילים שנשלחו החודש — מול מכסות ה-Free Tier.
+  FUNCTION admin_usage (p_token VARCHAR2) RETURN CLOB IS
+    l_uid   NUMBER := admin_guard(p_token);
+    l_gb    NUMBER := 0;
+    l_mails NUMBER := 0;
+  BEGIN
+    BEGIN SELECT ROUND(NVL(SUM(bytes),0)/1024/1024/1024, 3) INTO l_gb FROM user_segments; EXCEPTION WHEN OTHERS THEN l_gb := 0; END;
+    BEGIN SELECT COUNT(*) INTO l_mails FROM apex_mail_log WHERE sent_on >= TRUNC(SYSDATE,'MM'); EXCEPTION WHEN OTHERS THEN l_mails := 0; END;
+    APEX_JSON.initialize_clob_output;
+    APEX_JSON.open_object;
+      APEX_JSON.write('ok', TRUE);
+      APEX_JSON.write('storage_gb', l_gb);
+      APEX_JSON.write('storage_limit_gb', 250);
+      APEX_JSON.write('emails_month', l_mails);
+      APEX_JSON.write('emails_limit', 3000);
+    APEX_JSON.close_object;
+    RETURN APEX_JSON.get_clob_output;
+  EXCEPTION WHEN OTHERS THEN APEX_JSON.free_output; RETURN err(SQLERRM);
+  END admin_usage;
+
 END api_pkg;
 /
 
@@ -1041,6 +1096,12 @@ BEGIN
     p_source_type=>ORDS.source_type_plsql,
     p_source=>q'[BEGIN api_pkg.emit(api_pkg.create_booking(:token, :departure, :notes, :pax, :pref_time, :wet_op, :origin, :dest)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
 
+  -- agent/quote/create (POST) — הצעת מחיר דחופה יזומה ע"י הסוכן
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'agent/quote/create');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'agent/quote/create', p_method=>'POST',
+    p_source_type=>ORDS.source_type_plsql,
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.agent_create_quote(:token, :dept_id, :departure, :pax, :pref_time, :origin, :dest, :price, :currency, :trip, :notes, :low_cost)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
+
   -- bookings/edit (POST)
   ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'bookings/edit');
   ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'bookings/edit', p_method=>'POST',
@@ -1057,7 +1118,7 @@ BEGIN
   ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'bookings/action');
   ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'bookings/action', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
-    p_source=>q'[BEGIN api_pkg.emit(api_pkg.do_action(:token, :id, :action, :price, :currency, :trip, :notes, :pnr, :ref, :tdate, :reason)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.do_action(:token, :id, :action, :price, :currency, :trip, :notes, :pnr, :ref, :tdate, :reason, :low_cost)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
 
   -- notifications (POST = list)
   ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'notifications');
@@ -1154,6 +1215,12 @@ BEGIN
   ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/logins', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
     p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_logins(:token)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
+
+  -- admin/usage (POST = בקרת שימוש: אחסון + מיילים)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'admin/usage');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/usage', p_method=>'POST',
+    p_source_type=>ORDS.source_type_plsql,
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_usage(:token)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
 
   -- notify/set (POST = הדלקת/כיבוי מייל למשתמש)
   ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'notify/set');

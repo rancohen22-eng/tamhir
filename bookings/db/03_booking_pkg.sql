@@ -155,9 +155,14 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
         '<img src="'||g_assets_url||'teltos" alt="Teltos" height="26" style="vertical-align:middle;background:#fff;border-radius:6px;padding:3px 7px">'||
       '</div>'||
       '<div style="padding:18px">'||
+        CASE WHEN r.urgent = 'Y' THEN
+          '<div style="background:#b3261e;color:#fff;font-weight:800;text-align:center;border-radius:8px;padding:8px 10px;margin-bottom:10px;font-size:15px">'||
+          lbl('⚠ הצעת מחיר דחופה — יזומה ע״י הסוכן','⚠ URGENT quote — agent-initiated')||'</div>' ELSE '' END||
         '<h2 style="color:#123a86;margin:0 0 8px;font-size:18px">'||lbl('הזמנת טיסות מטלטוס','Flight Booking by Teltos')||
           ' &middot; '||lbl('הזמנה','Booking')||' #'||p_booking_id||'</h2>'||
         '<span style="display:inline-block;background:#e8eff7;color:#123a86;border-radius:999px;padding:3px 12px;font-size:13px;font-weight:700">'||l_st||'</span>'||
+        CASE WHEN r.low_cost = 'Y' THEN
+          ' <span style="display:inline-block;background:#b26b00;color:#fff;border-radius:999px;padding:3px 12px;font-size:13px;font-weight:700">LOW COST</span>' ELSE '' END||
         '<table style="width:100%;border-collapse:collapse;margin-top:14px;font-size:14px">'||
           row_html(lbl('מחלקה','Department'), l_dep)||
           row_html(lbl('נתיב','Route'), l_route)||

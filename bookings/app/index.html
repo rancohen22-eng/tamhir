@@ -145,7 +145,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-19.8';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.9';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight.
@@ -200,7 +200,10 @@ const T = {
     del:"מחק",delUser:"מחיקת משתמש",confirmDel:"למחוק את המשתמש?",loginLog:"לוג כניסות",time:"זמן",cancelBooking:"בטל הזמנה",
     emailNotif:"התראות במייל",emailOn:"מקבל התראות במייל",emailOff:"התראות מייל כבויות",
     R_INITIATOR:"יוזם",R_APPROVER:"מאשר",R_AGENT:"סוכן",R_FINANCE:"פיננס",R_ADMIN:"מנהל מערכת",
-    deptApprovers:"מאשר לפי מחלקה",pickUser:"בחר מאשר",noApprover:"— לא הוגדר —"},
+    deptApprovers:"מאשר לפי מחלקה",pickUser:"בחר מאשר",noApprover:"— לא הוגדר —",
+    lowCost:"LOW COST",lowCostQ:"טיסת LOW COST?",urgent:"דחוף",urgentQuote:"הצעת מחיר דחופה",
+    attachReq:"צרף קובץ (אקסל/PDF, רשות)",usage:"בקרת שימוש",storage:"אחסון",emailsMo:"מיילים החודש",send:"שלח",
+    emailsUnit:"מיילים",usageNote:"נתוני צריכה מול מכסות התוכנית החינמית של Oracle (250GB אחסון · 3,000 מיילים בחודש).",attachedFile:"קובץ מצורף"},
   en:{title:"Flight Booking by Teltos",logout:"Logout",bookings:"Bookings",newB:"New Booking",notifications:"Notifications",
     dept:"Department",status:"Status",initiator:"Initiator",agent:"Agent",approver:"Approver",openDate:"Open Date",
     departure:"Departure",ticketingDate:"Ticketing Date",price:"Price",currency:"Currency",pnr:"PNR",uref:"Unique Ref",
@@ -227,7 +230,10 @@ const T = {
     delUser:"Delete user",confirmDel:"Delete this user?",loginLog:"Login log",time:"Time",cancelBooking:"Cancel booking",
     emailNotif:"Email notifications",emailOn:"Email notifications on",emailOff:"Email notifications off",
     R_INITIATOR:"Initiator",R_APPROVER:"Approver",R_AGENT:"Agent",R_FINANCE:"Finance",R_ADMIN:"Admin",
-    deptApprovers:"Approver per department",pickUser:"Choose approver",noApprover:"— not set —"}
+    deptApprovers:"Approver per department",pickUser:"Choose approver",noApprover:"— not set —",
+    lowCost:"LOW COST",lowCostQ:"Low-cost flight?",urgent:"URGENT",urgentQuote:"Urgent quote",
+    attachReq:"Attach file (Excel/PDF, optional)",usage:"Usage",storage:"Storage",emailsMo:"Emails this month",send:"Send",
+    emailsUnit:"emails",usageNote:"Consumption vs. Oracle free-tier quotas (250GB storage · 3,000 emails/month).",attachedFile:"Attached file"}
 };
 function t(k){ return (T[VIEW.lang]||T.he)[k]||k; }
 function stLabel(code){ const s=STMAP[code]; return s?(VIEW.lang==='en'?s.en:s.he):code; }
@@ -307,6 +313,7 @@ function canInitiate(){ return hasRole('INITIATOR')||hasRole('APPROVER'); }
 function tabsFor(){
   const tabs=[['bookings',t('bookings')]];
   if(canInitiate()) tabs.push(['new',t('newB')]);
+  if(hasRole('AGENT')) tabs.push(['urgent',t('urgentQuote')]);
   if(hasRole('FINANCE')||hasRole('ADMIN')) tabs.push(['finance',t('finance')]);
   if(hasRole('ADMIN')) tabs.push(['admin',t('admin')]);
   if(hasRole('ADMIN')) tabs.push(['log',t('loginLog')]);
@@ -330,6 +337,7 @@ function render(){
   if(VIEW.tab==='notifications') return renderNotifications(app);
   if(VIEW.bookingId) return renderDetail(app,VIEW.bookingId);
   if(VIEW.tab==='new') return renderNew(app);
+  if(VIEW.tab==='urgent') return renderUrgent(app);
   if(VIEW.tab==='finance') return renderFinance(app);
   if(VIEW.tab==='admin') return renderAdmin(app);
   if(VIEW.tab==='log') return renderLog(app);
@@ -361,7 +369,7 @@ async function renderBookings(app){
       <th>${t('initiator')}</th><th>${t('agent')}</th><th>${t('departure')}</th><th>${t('price')}</th>
       <th>${t('pnr')}</th><th>${t('updatedBy')}</th></tr></thead><tbody>${
       list.map(b=>`<tr onclick="openBk(${b.id})">
-        <td>${b.seq}</td><td><span class="badge st-${b.status}">${stLabel(b.status)}</span></td>
+        <td>${b.seq}${b.urgent==='Y'?` <span class="badge" style="background:var(--danger);color:#fff">${t('urgent')}</span>`:''}${b.low_cost==='Y'?` <span class="badge" style="background:var(--warn);color:#fff">LC</span>`:''}</td><td><span class="badge st-${b.status}">${stLabel(b.status)}</span></td>
         <td>${esc(VIEW.lang==='en'?b.dept_en:b.dept_he)}</td><td>${esc(routeLabel(b))}</td><td>${b.pax||1}</td>
         <td>${esc(b.initiator)}</td><td>${esc(b.agent||t('none'))}</td><td>${b.departure_date||t('none')}</td>
         <td>${b.price!=null?curSym(b.currency)+Number(b.price).toLocaleString():t('none')}</td>
@@ -385,9 +393,16 @@ async function renderAdmin(app){
   const airports=apr.ok?(apr.airports||[]):[];
   const dar=await api('admin/dept_approvers',{token:SES.token});
   const daMap={}; (dar.ok?(dar.approvers||[]):[]).forEach(a=>{ if(!daMap[a.dept_id]) daMap[a.dept_id]={user_id:a.user_id,name:a.name}; });
+  const usg=await api('admin/usage',{token:SES.token});
+  const usage=usg.ok?usg:null;
   const deptOpts=BOOT.departments.map(d=>`<option value="${d.id}">${esc(deptName(d))}</option>`).join('');
   const roleOpts=ROLES.map(r=>`<option value="${r}">${r}</option>`).join('');
   app.innerHTML=`
+  ${usage?`<div class="card"><h2>${t('usage')}</h2>
+    ${meterHtml(t('storage'),usage.storage_gb,usage.storage_limit_gb,'GB')}
+    ${meterHtml(t('emailsMo'),usage.emails_month,usage.emails_limit,t('emailsUnit'))}
+    <p class="muted" style="font-size:12px;margin-top:6px">${t('usageNote')}</p>
+  </div>`:''}
   <div class="card"><h2>${t('departments')}</h2>
     <div class="tablewrap"><table><thead><tr><th>${t('name')}</th><th>${t('code')}</th></tr></thead><tbody>${
       BOOT.departments.map(d=>`<tr><td>${esc(deptName(d))}</td><td>${esc(d.code)}</td></tr>`).join('')}</tbody></table></div>
@@ -467,6 +482,17 @@ async function renderAdmin(app){
   <div class="card"><h2>${t('currencies')}</h2>
     <div class="tablewrap"><table><thead><tr><th>${t('code')}</th><th>${t('symbol')}</th></tr></thead>
     <tbody>${BOOT.currencies.map(c=>`<tr><td>${c.code}</td><td>${c.symbol}</td></tr>`).join('')}</tbody></table></div>
+  </div>`;
+}
+function meterHtml(label,val,lim,unit){
+  val=Number(val)||0; lim=Number(lim)||1;
+  const pct=Math.min(100,Math.round(val/lim*1000)/10);
+  const col=pct>=90?'var(--danger)':(pct>=70?'var(--warn)':'var(--accent)');
+  return `<div style="margin:10px 0">
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+      <b>${label}</b><span dir="ltr" class="muted">${val} / ${lim} ${unit} · ${pct}%</span></div>
+    <div style="background:#e6ebf2;border-radius:999px;height:12px;overflow:hidden">
+      <div style="width:${pct}%;height:100%;background:${col};border-radius:999px;transition:width .4s"></div></div>
   </div>`;
 }
 function filterAp(){ const q=document.getElementById('ap_search').value.toLowerCase();
@@ -717,6 +743,7 @@ function renderNew(app){
       ${acmi?`<div><label class="f">${t('wetOp')}</label><select id="n_wet" class="fld"><option value="">${t('none')}</option>${wetOpts}</select></div>`:''}
     </div>
     <label class="f">${t('quoteNotes')}</label><textarea id="n_note" class="fld" rows="2"></textarea>
+    <label class="f">${t('attachReq')}</label><input id="n_file" class="fld" type="file" accept=".xlsx,.xls,.csv,application/pdf,image/*">
     <div class="btnrow"><button class="btn ok" onclick="createBooking()">${t('sendToAgents')}</button></div>
     <div id="n_err" style="color:var(--danger);margin-top:6px"></div></div>`;
 }
@@ -732,9 +759,58 @@ async function createBooking(){
     wet_op:wetEl?(wetEl.value||''):'',
     origin:document.getElementById('n_org').value.trim(),
     dest:document.getElementById('n_dst').value.trim()});
+  if(!r.ok){ spin(false); document.getElementById('n_err').textContent=r.error; return; }
+  const fi=document.getElementById('n_file');
+  if(fi && fi.files.length){ const f=fi.files[0], b64=await fileToB64(f);
+    await api('files/upload',{token:SES.token,booking_id:r.id,kind:'OTHER',filename:f.name,mime:f.type,data:b64}); }
   spin(false);
-  if(!r.ok){ document.getElementById('n_err').textContent=r.error; return; }
   VIEW.tab='bookings'; VIEW.bookingId=r.id; render();
+}
+
+/* ── הצעת מחיר דחופה (סוכן יוזם) ── */
+function renderUrgent(app){
+  const deptOpts=BOOT.departments.map(d=>`<option value="${d.id}">${esc(deptName(d))}</option>`).join('');
+  const curOpts=BOOT.currencies.map(c=>`<option value="${c.code}" ${c.is_default==='Y'?'selected':''}>${c.code} ${c.symbol}</option>`).join('');
+  app.innerHTML=`<div class="card">
+    <h2><span class="badge" style="background:var(--danger);color:#fff">${t('urgent')}</span> ${t('urgentQuote')}</h2>
+    <p class="muted">הצעה יזומה ללא בקשה מוקדמת — בחר את המחלקה שהמאשר שלה יאשר.</p>
+    <div class="rowflex">
+      <div><label class="f">${t('dept')} *</label><select id="u_dept" class="fld"><option value="">${t('none')}</option>${deptOpts}</select></div>
+      <div><label class="f">${t('departure')} *</label><input id="u_dep" class="fld" type="date"></div>
+      <div><label class="f">${t('pax')}</label><input id="u_pax" class="fld" type="number" min="1" value="1"></div>
+    </div>
+    <div class="rowflex">
+      <div><label class="f">${t('origin')}</label><select id="u_org" class="fld"><option value="">${t('none')}</option>${airportOptions('TLV')}</select></div>
+      <div><label class="f">${t('dest')}</label><select id="u_dst" class="fld"><option value="">${t('chooseDest')}</option>${airportOptions('')}</select></div>
+      <div><label class="f">${t('prefTime')} ${t('optional')}</label><input id="u_time" class="fld" type="time"></div>
+    </div>
+    <div class="rowflex">
+      <div><label class="f">${t('price')} *</label><input id="u_price" class="fld" type="number" min="0"></div>
+      <div><label class="f">${t('currency')}</label><select id="u_cur" class="fld">${curOpts}</select></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13.5px;cursor:pointer"><input type="checkbox" id="u_lowcost"> ${t('lowCostQ')}</label>
+    <label class="f">${t('tripDetails')}</label><textarea id="u_trip" class="fld" rows="2"></textarea>
+    <label class="f">${t('quoteNotes')}</label><textarea id="u_note" class="fld" rows="2"></textarea>
+    <label class="f">${t('uploadScreenshot')} *</label><input id="u_file" class="fld" type="file" accept="image/*,application/pdf">
+    <div class="btnrow"><button class="btn danger" onclick="submitUrgent()">${t('send')} · ${t('urgent')}</button></div>
+    <div id="u_err" style="color:var(--danger);margin-top:6px"></div></div>`;
+}
+async function submitUrgent(){
+  const dept=document.getElementById('u_dept').value, dep=document.getElementById('u_dep').value;
+  const price=document.getElementById('u_price').value, fi=document.getElementById('u_file');
+  if(!dept||!dep||!price||!fi.files.length){ document.getElementById('u_err').textContent=t('required2'); return; }
+  spin(true);
+  const r=await api('agent/quote/create',{token:SES.token,dept_id:dept,departure:dep,
+    pax:document.getElementById('u_pax').value||'1',pref_time:document.getElementById('u_time').value||'',
+    origin:document.getElementById('u_org').value.trim(),dest:document.getElementById('u_dst').value.trim(),
+    price:price,currency:document.getElementById('u_cur').value,
+    trip:document.getElementById('u_trip').value||'',notes:document.getElementById('u_note').value||'',
+    low_cost:document.getElementById('u_lowcost').checked?'Y':'N'});
+  if(!r.ok){ spin(false); document.getElementById('u_err').textContent=r.error; return; }
+  const f=fi.files[0], b64=await fileToB64(f);
+  await api('files/upload',{token:SES.token,booking_id:r.id,kind:'QUOTE_SCREENSHOT',filename:f.name,mime:f.type,data:b64});
+  spin(false);
+  await refreshUnread(); VIEW.tab='bookings'; VIEW.bookingId=r.id; render();
 }
 
 /* ── פירוט הזמנה ── */
@@ -754,8 +830,9 @@ async function renderDetail(app,id){
   app.innerHTML=`<div class="card">
     <div class="btnrow" style="margin:0 0 10px"><button class="btn ghost sm" onclick="VIEW.bookingId=null;render()">← ${t('back')}</button>
       ${canEdit(b)?`<button class="btn ghost sm" onclick="VIEW.editing=true;render()">✎ ${t('edit')}</button>`:''}</div>
+    ${b.urgent==='Y'?`<div style="background:var(--danger);color:#fff;font-weight:800;text-align:center;border-radius:8px;padding:8px 10px;margin-bottom:10px">⚠ ${t('urgentQuote')}</div>`:''}
     ${cobrand}
-    <h2>${t('details')} #${b.seq} <span class="badge st-${b.status}">${stLabel(b.status)}</span></h2>
+    <h2>${t('details')} #${b.seq} <span class="badge st-${b.status}">${stLabel(b.status)}</span>${b.low_cost==='Y'?` <span class="badge" style="background:var(--warn);color:#fff">${t('lowCost')}</span>`:''}</h2>
     <div class="grid">
       ${kpi(t('dept'),esc(VIEW.lang==='en'?b.dept_en:b.dept_he))}
       ${kpi(t('route'),esc(routeLabel(b)))}
@@ -779,7 +856,7 @@ async function renderDetail(app,id){
     <div id="actions">${actionsHtml(b)}</div>
   </div>
   <div class="card"><h2>${t('files')}</h2>${
-    files.length?files.map(f=>{const kl=f.kind==='QUOTE_SCREENSHOT'?t('uploadScreenshot'):(f.kind==='FINAL_TICKET'?t('uploadTicket'):'—');
+    files.length?files.map(f=>{const kl=f.kind==='QUOTE_SCREENSHOT'?t('uploadScreenshot'):(f.kind==='FINAL_TICKET'?t('uploadTicket'):t('attachedFile'));
       const url=API+'files/'+f.id;
       return `<div class="filerow">📄<div style="flex:1"><b>${kl}</b><br><span class="muted">${esc(f.filename)}</span></div>
         <a class="btn ghost sm" href="${url}" target="_blank">${t('view')}</a>
@@ -866,6 +943,7 @@ function quoteForm(id,cur){
   document.getElementById('actions').innerHTML=`<h3>${t('submitQuote')}</h3>
     <div class="rowflex"><div><label class="f">${t('price')} *</label><input id="q_price" class="fld" type="number" min="0"></div>
       <div><label class="f">${t('currency')}</label><select id="q_cur" class="fld">${curOpts}</select></div></div>
+    <label style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13.5px;cursor:pointer"><input type="checkbox" id="q_lowcost"> ${t('lowCostQ')}</label>
     <label class="f">${t('tripDetails')}</label><textarea id="q_trip" class="fld" rows="3"></textarea>
     <label class="f">${t('quoteNotes')}</label><textarea id="q_note" class="fld" rows="2"></textarea>
     <label class="f">${t('uploadScreenshot')} *</label><input id="q_file" class="fld" type="file" accept="image/*,application/pdf">
@@ -882,7 +960,8 @@ async function submitQuote(id){
   if(!up.ok){ spin(false); document.getElementById('q_err').textContent=up.error; return; }
   const r=await api('bookings/action',{token:SES.token,id:id,action:'submit_quote',price:price,
     currency:document.getElementById('q_cur').value,trip:document.getElementById('q_trip').value||'',
-    notes:document.getElementById('q_note').value||''});
+    notes:document.getElementById('q_note').value||'',
+    low_cost:document.getElementById('q_lowcost').checked?'Y':'N'});
   spin(false);
   if(!r.ok){ document.getElementById('q_err').textContent=r.error; return; }
   await refreshUnread(); render();
