@@ -194,12 +194,13 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
     p_subj_he IN VARCHAR2, p_subj_en IN VARCHAR2,
     p_msg_he  IN VARCHAR2, p_msg_en  IN VARCHAR2
   ) IS
-    l_lang   app_users.pref_lang%TYPE;
-    l_email  app_users.email%TYPE;
-    l_notify VARCHAR2(1);
-    l_msg    VARCHAR2(1000);
-    l_subj   VARCHAR2(200);
-    l_dir    VARCHAR2(3);
+    l_lang    app_users.pref_lang%TYPE;
+    l_email   app_users.email%TYPE;
+    l_notify  VARCHAR2(1);
+    l_msg     VARCHAR2(1000);
+    l_subj    VARCHAR2(200);
+    l_dir     VARCHAR2(3);
+    l_mail_id NUMBER;
   BEGIN
     BEGIN
       SELECT pref_lang, email, NVL(notify_email,'Y') INTO l_lang, l_email, l_notify
@@ -229,13 +230,20 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
           APEX_UTIL.SET_SECURITY_GROUP_ID(APEX_UTIL.FIND_SECURITY_GROUP_ID('ARKIA'));
         EXCEPTION WHEN OTHERS THEN NULL; END;
         -- p_body ו-p_body_html חייבים להיות מאותו טיפוס (CLOB) כדי למנוע PLS-00307
-        -- (APEX_MAIL.SEND עמוס-הגדרות ל-VARCHAR2/CLOB).
-        APEX_MAIL.SEND(
+        -- (APEX_MAIL.SEND עמוס-הגדרות ל-VARCHAR2/CLOB). צורת הפונקציה מחזירה mail_id
+        -- כדי לצרף את קבצי ההזמנה (צילום ההצעה / מסמך הכרטוס).
+        l_mail_id := APEX_MAIL.SEND(
           p_to        => l_email,
           p_from      => g_mail_from,
           p_subj      => l_subj,
           p_body      => TO_CLOB(l_msg || CHR(10) || g_app_url || '#b=' || p_booking_id),
           p_body_html => booking_email_html(p_booking_id, l_lang));
+        FOR f IN (SELECT filename, mime_type, file_blob FROM booking_files WHERE booking_id = p_booking_id) LOOP
+          BEGIN
+            APEX_MAIL.ADD_ATTACHMENT(p_mail_id => l_mail_id, p_attachment => f.file_blob,
+              p_filename => f.filename, p_mime_type => NVL(f.mime_type,'application/octet-stream'));
+          EXCEPTION WHEN OTHERS THEN NULL; END;
+        END LOOP;
         BEGIN APEX_MAIL.PUSH_QUEUE; EXCEPTION WHEN OTHERS THEN NULL; END;
       EXCEPTION
         WHEN OTHERS THEN NULL;  -- מייל לא מוגדר/נכשל — הפעמון כבר נרשם
