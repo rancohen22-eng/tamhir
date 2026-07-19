@@ -11,15 +11,32 @@ gen_ui.py — מחולל את bookings/api/install_ui.sql.
 הרצה (מתוך תיקיית bookings/):  python3 api/gen_ui.py
 לאחר כל שינוי ב-app/index.html או ב-assets/ — יש להריץ מחדש ולבצע commit.
 """
-import base64, os, textwrap
+import base64, json, os, textwrap
 
 HERE   = os.path.dirname(os.path.abspath(__file__))
 ROOT   = os.path.dirname(HERE)                       # bookings/
 APP     = os.path.join(ROOT, 'app', 'index.html')
 ARKIA   = os.path.join(ROOT, 'assets', 'arkia-logo.svg')
 TELTOS  = os.path.join(ROOT, 'assets', 'teltos-logo.jpeg')
+APPICON = os.path.join(ROOT, 'assets', 'appicon.png')
 OUT     = os.path.join(HERE, 'install_ui.sql')
 CHUNK   = 3800                                        # < 4000 (מגבלת ליטרל VARCHAR2)
+
+# מניפסט PWA (הוספה למסך הבית). מוגש מ-ORDS same-origin עם האפליקציה.
+MANIFEST = {
+    "name": "הזמנת טיסות מטלטוס",
+    "short_name": "הזמנות",
+    "start_url": "/ords/arkia/api/app",
+    "scope": "/ords/arkia/api/",
+    "display": "standalone",
+    "background_color": "#123a86",
+    "theme_color": "#123a86",
+    "lang": "he", "dir": "rtl",
+    "icons": [
+        {"src": "/ords/arkia/api/assets/appicon", "sizes": "512x512", "type": "image/png", "purpose": "any"},
+        {"src": "/ords/arkia/api/assets/appicon", "sizes": "512x512", "type": "image/png", "purpose": "maskable"},
+    ],
+}
 
 
 def b64(path):
@@ -37,9 +54,12 @@ def appends(target_where, data):
 
 
 def main():
-    app_b64    = b64(APP)
-    arkia_b64  = b64(ARKIA)
-    teltos_b64 = b64(TELTOS)
+    app_b64      = b64(APP)
+    arkia_b64    = b64(ARKIA)
+    teltos_b64   = b64(TELTOS)
+    appicon_b64  = b64(APPICON)
+    manifest_b64 = base64.b64encode(
+        json.dumps(MANIFEST, ensure_ascii=False).encode('utf-8')).decode('ascii')
 
     L = []
     L.append("--------------------------------------------------------------------------------")
@@ -57,10 +77,14 @@ def main():
     L.append("INSERT INTO api_app (id, b64) VALUES (1, EMPTY_CLOB());")
     L.append("INSERT INTO api_assets (name, mime, b64) VALUES ('arkia', 'image/svg+xml', EMPTY_CLOB());")
     L.append("INSERT INTO api_assets (name, mime, b64) VALUES ('teltos', 'image/jpeg', EMPTY_CLOB());")
+    L.append("INSERT INTO api_assets (name, mime, b64) VALUES ('appicon', 'image/png', EMPTY_CLOB());")
+    L.append("INSERT INTO api_assets (name, mime, b64) VALUES ('manifest', 'application/manifest+json', EMPTY_CLOB());")
 
-    L += appends(("api_app SET",       "WHERE id=1"),            app_b64)
-    L += appends(("api_assets SET",    "WHERE name='arkia'"),    arkia_b64)
-    L += appends(("api_assets SET",    "WHERE name='teltos'"),   teltos_b64)
+    L += appends(("api_app SET",       "WHERE id=1"),              app_b64)
+    L += appends(("api_assets SET",    "WHERE name='arkia'"),      arkia_b64)
+    L += appends(("api_assets SET",    "WHERE name='teltos'"),     teltos_b64)
+    L += appends(("api_assets SET",    "WHERE name='appicon'"),    appicon_b64)
+    L += appends(("api_assets SET",    "WHERE name='manifest'"),   manifest_b64)
 
     L.append("COMMIT;")
     L.append("")

@@ -5,6 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="robots" content="noindex,nofollow">
 <title>הזמנת טיסות מטלטוס · ארקיע</title>
+<!-- PWA: הוספה למסך הבית -->
+<link rel="manifest" href="/ords/arkia/api/assets/manifest">
+<meta name="theme-color" content="#123a86">
+<link rel="apple-touch-icon" href="/ords/arkia/api/assets/appicon">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="הזמנות טלטוס">
 <style>
   :root{
     --bg:#f2f5f9; --card:#fff; --ink:#0e1c2e; --muted:#5b6b7f;
@@ -135,7 +143,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-18.8';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-18.9';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight
@@ -223,21 +231,14 @@ function airportOptions(sel){ return (BOOT.airports||[]).map(a=>`<option value="
 function routeLabel(b){ if(!b.origin&&!b.dest) return t('none'); return (b.origin||'?')+' → '+(b.dest||'?'); }
 function isACMI(deptId){ const d=(BOOT.departments||[]).find(x=>x.id===deptId); return d&&d.code==='ACMI'; }
 
-/* ── התחברות ── */
-async function doLogin(){
-  const u=document.getElementById('lk_user').value.trim();
-  const p=document.getElementById('lk_pw').value;
-  if(!u||!p){ document.getElementById('lockErr').textContent=t('required2'); return; }
-  spin(true);
-  const res=await api('login',{username:u,password:p});
-  spin(false);
-  if(!res.ok){ document.getElementById('lockErr').textContent = res.error==='bad_credentials'?'שם משתמש או סיסמה שגויים / Invalid credentials':('שגיאה: '+res.error); return; }
-  SES={token:res.token,user:res.user,roles:res.roles||[],agent_id:res.agent_id};
-  VIEW.lang=(res.user.pref_lang||'HE').toLowerCase();
-  spin(true);
+/* ── התחברות + סשן נשמר (localStorage) ── */
+const SKEY='arkia_session';
+function saveSession(){ try{ localStorage.setItem(SKEY, JSON.stringify(SES)); }catch(e){} }
+function clearSession(){ try{ localStorage.removeItem(SKEY); }catch(e){} }
+// טוען bootstrap עם הטוקן הנוכחי ומציג את האפליקציה. מחזיר false אם הטוקן פג.
+async function enterApp(){
   const boot=await api('bootstrap',{token:SES.token});
-  spin(false);
-  if(!boot.ok){ alert('bootstrap error: '+boot.error); return; }
+  if(!boot.ok) return false;
   BOOT=boot; STMAP={}; (boot.statuses||[]).forEach(s=>STMAP[s.code]={he:s.he,en:s.en,terminal:s.terminal});
   APMAP={}; (boot.airports||[]).forEach(a=>APMAP[a.iata]={name_he:a.name_he,name_en:a.name_en});
   buildAirportList();
@@ -246,10 +247,31 @@ async function doLogin(){
   document.getElementById('lock').classList.add('hidden');
   document.getElementById('appwrap').classList.remove('hidden');
   applyLang(); await refreshUnread(); render();
+  return true;
 }
-function logout(){ SES=null; document.getElementById('appwrap').classList.add('hidden');
+async function doLogin(){
+  const u=document.getElementById('lk_user').value.trim();
+  const p=document.getElementById('lk_pw').value;
+  if(!u||!p){ document.getElementById('lockErr').textContent=t('required2'); return; }
+  spin(true);
+  const res=await api('login',{username:u,password:p});
+  if(!res.ok){ spin(false); document.getElementById('lockErr').textContent = res.error==='bad_credentials'?'שם משתמש או סיסמה שגויים / Invalid credentials':('שגיאה: '+res.error); return; }
+  SES={token:res.token,user:res.user,roles:res.roles||[],agent_id:res.agent_id};
+  VIEW.lang=(res.user.pref_lang||'HE').toLowerCase();
+  saveSession();
+  const ok=await enterApp();
+  spin(false);
+  if(!ok){ document.getElementById('lockErr').textContent='שגיאת טעינה / load error'; }
+}
+function logout(){ clearSession(); SES=null; document.getElementById('appwrap').classList.add('hidden');
   document.getElementById('lock').classList.remove('hidden');
   document.getElementById('lk_user').value=''; document.getElementById('lk_pw').value=''; document.getElementById('lockErr').textContent=''; }
+// שחזור סשן בטעינת העמוד (מובייל: להישאר מחובר)
+async function tryRestore(){
+  let s=null; try{ s=JSON.parse(localStorage.getItem(SKEY)||'null'); }catch(e){}
+  if(s && s.token && s.user){ SES=s; VIEW.lang=(s.user.pref_lang||'HE').toLowerCase();
+    spin(true); const ok=await enterApp(); spin(false); if(!ok){ clearSession(); SES=null; } }
+}
 
 function buildAirportList(){
   const dl=document.getElementById('airportsList');
@@ -892,7 +914,7 @@ async function renderNotifications(app){
 async function toggleNotify(){
   const to=SES.user.notify_email==='N'?'Y':'N';
   spin(true); const r=await api('notify/set',{token:SES.token,on:to}); spin(false);
-  if(r.ok){ SES.user.notify_email=to; } render();
+  if(r.ok){ SES.user.notify_email=to; saveSession(); } render();
 }
 async function markAllRead(){ spin(true); await api('notifications/read',{token:SES.token}); await refreshUnread(); spin(false); render(); }
 async function openFromNotif(bid){ await api('notifications/read',{token:SES.token}); await refreshUnread();
@@ -904,6 +926,7 @@ document.getElementById('lk_pw').addEventListener('keydown',e=>{ if(e.key==='Ent
 document.getElementById('langBtn').onclick=toggleLang;
 document.getElementById('logoutBtn').onclick=logout;
 document.getElementById('bellBtn').onclick=openBell;
+tryRestore();   // מובייל: להישאר מחובר בין כניסות
 </script>
 </body>
 </html>

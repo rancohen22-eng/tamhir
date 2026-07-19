@@ -213,19 +213,21 @@ EXCEPTION WHEN OTHERS THEN NULL;
 END;
 /
 
--- ── טבלת סשנים (טוקנים) ──
+-- ── טבלת סשנים (טוקנים) ── נוצרת רק אם אינה קיימת, כדי שסשנים ישרדו פריסות
+-- (משתמשים נשארים מחוברים במובייל בין דeployments).
+DECLARE n NUMBER;
 BEGIN
-  EXECUTE IMMEDIATE 'DROP TABLE api_sessions CASCADE CONSTRAINTS PURGE';
-EXCEPTION WHEN OTHERS THEN NULL;
+  SELECT COUNT(*) INTO n FROM user_tables WHERE table_name = 'API_SESSIONS';
+  IF n = 0 THEN
+    EXECUTE IMMEDIATE 'CREATE TABLE api_sessions (
+      token      VARCHAR2(64) PRIMARY KEY,
+      user_id    NUMBER NOT NULL,
+      created_at TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
+      expires_at TIMESTAMP DEFAULT SYSTIMESTAMP + INTERVAL ''30'' DAY NOT NULL,
+      CONSTRAINT api_sessions_user_fk FOREIGN KEY (user_id) REFERENCES app_users (user_id) ON DELETE CASCADE)';
+  END IF;
 END;
 /
-CREATE TABLE api_sessions (
-  token      VARCHAR2(64) PRIMARY KEY,
-  user_id    NUMBER NOT NULL,
-  created_at TIMESTAMP DEFAULT SYSTIMESTAMP NOT NULL,
-  expires_at TIMESTAMP DEFAULT SYSTIMESTAMP + INTERVAL '12' HOUR NOT NULL,
-  CONSTRAINT api_sessions_user_fk FOREIGN KEY (user_id) REFERENCES app_users (user_id) ON DELETE CASCADE
-);
 
 --------------------------------------------------------------------------------
 -- חבילת ה-API — בונה JSON ומריצה את זרימת booking_pkg
@@ -331,7 +333,8 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
       INTO l_uid, l_dept, l_lang, l_full, l_notify
       FROM app_users WHERE LOWER(username) = LOWER(p_username);
     l_token := RAWTOHEX(SYS_GUID());
-    INSERT INTO api_sessions (token, user_id) VALUES (l_token, l_uid);
+    INSERT INTO api_sessions (token, user_id, expires_at)
+      VALUES (l_token, l_uid, SYSTIMESTAMP + INTERVAL '30' DAY);
     INSERT INTO login_log (user_id, username) VALUES (l_uid, LOWER(p_username));
     COMMIT;
     SELECT MAX(agent_id) INTO l_agent FROM agents WHERE user_id = l_uid;
