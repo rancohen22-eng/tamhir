@@ -229,12 +229,6 @@ EXCEPTION WHEN OTHERS THEN NULL;
 END;
 /
 
--- ── דיאגנוסטיקה זמנית: ספירת שדות התעופה לאחר הזריעה ──
-DECLARE n NUMBER; BEGIN
-  SELECT COUNT(*) INTO n FROM airports;
-  DBMS_OUTPUT.PUT_LINE('DIAG-AIRPORTS: total rows = '||n);
-END;
-/
 
 
 -- ── טבלת סשנים (טוקנים) ── נוצרת רק אם אינה קיימת, כדי שסשנים ישרדו פריסות
