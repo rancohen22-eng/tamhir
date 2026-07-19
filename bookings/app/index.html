@@ -95,6 +95,13 @@
   #spin{position:fixed;inset:0;background:rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;z-index:50}
   #spin div{width:34px;height:34px;border:4px solid var(--chip);border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite}
   @keyframes sp{to{transform:rotate(360deg)}}
+  .ac{position:relative}
+  .ac-list{position:absolute;left:0;right:0;top:100%;z-index:60;background:#fff;border:1px solid var(--line);border-radius:10px;max-height:250px;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.14);margin-top:2px}
+  .ac-item{padding:9px 12px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--chip)}
+  .ac-item:last-child{border-bottom:0}
+  .ac-item:hover,.ac-item.on{background:var(--chip)}
+  .ac-item b{color:var(--brand)}
+  .ac-empty{padding:9px 12px;color:var(--muted);font-size:13px}
 </style>
 </head>
 <body>
@@ -146,7 +153,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-19.12';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.13';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight.
@@ -198,6 +205,7 @@ const T = {
     lastUpdate:"עדכון אחרון",avgPax:"ממוצע נוסעים",byStatus:"לפי סטטוס",
     airports:"שדות תעופה",country:"מדינה",addAirport:"הוסף/עדכן שדה תעופה",activate:"הפעל",deactivate:"השבת",
     resetEmailed:"נשלח מייל עם סיסמה זמנית למשתמש:",sendToAgents:"שלח לכל הסוכנים",chooseDest:"בחר יעד",openPool:"פתוחה לכל הסוכנים",
+    typeToSearch:"הקלד קוד או שם יעד…",noMatch:"לא נמצאו יעדים תואמים",
     del:"מחק",delUser:"מחיקת משתמש",confirmDel:"למחוק את המשתמש?",loginLog:"לוג כניסות",time:"זמן",cancelBooking:"בטל הזמנה",
     emailNotif:"התראות במייל",emailOn:"מקבל התראות במייל",emailOff:"התראות מייל כבויות",
     R_INITIATOR:"יוזם",R_APPROVER:"מאשר",R_AGENT:"סוכן",R_FINANCE:"פיננס",R_ADMIN:"מנהל מערכת",
@@ -229,6 +237,7 @@ const T = {
     lastUpdate:"Last update",avgPax:"Avg passengers",byStatus:"By status",
     airports:"Airports",country:"Country",addAirport:"Add/update airport",activate:"Activate",deactivate:"Deactivate",
     resetEmailed:"A temporary password was emailed to the user:",sendToAgents:"Send to all agents",chooseDest:"Choose destination",openPool:"Open to all agents",
+    typeToSearch:"Type a code or destination…",noMatch:"No matching destinations",
     delUser:"Delete user",confirmDel:"Delete this user?",loginLog:"Login log",time:"Time",cancelBooking:"Cancel booking",
     emailNotif:"Email notifications",emailOn:"Email notifications on",emailOff:"Email notifications off",
     R_INITIATOR:"Initiator",R_APPROVER:"Approver",R_AGENT:"Agent",R_FINANCE:"Finance",R_ADMIN:"Admin",
@@ -247,6 +256,42 @@ function curSym(code){ const c=(BOOT.currencies||[]).find(x=>x.code===code); ret
 function deptName(d){ return VIEW.lang==='en'?(d.name_en||d.name_he):d.name_he; }
 function apLabel(iata){ if(!iata) return ''; const a=APMAP[iata]; return a?(iata+' · '+(VIEW.lang==='en'?a.name_en:a.name_he)):iata; }
 function airportOptions(sel){ return (BOOT.airports||[]).map(a=>`<option value="${a.iata}" ${a.iata===sel?'selected':''}>${esc(a.iata+' · '+(VIEW.lang==='en'?a.name_en:a.name_he))}</option>`).join(''); }
+
+/* ── תיבת חיפוש יעדים (combobox): מקלידים ומופיעות ההתאמות ── */
+function acInput(id, selIata, placeholder){
+  const cur = selIata ? apLabel(selIata) : '';
+  return `<div class="ac">
+    <input id="${id}" class="fld" autocomplete="off" inputmode="search" placeholder="${esc(placeholder||t('typeToSearch'))}"
+      value="${esc(cur)}" data-iata="${esc(selIata||'')}"
+      oninput="acFilter('${id}')" onfocus="acFilter('${id}')" onblur="acBlur('${id}')" onkeydown="acKey(event,'${id}')">
+    <div id="${id}_list" class="ac-list hidden"></div>
+  </div>`;
+}
+function acFilter(id){
+  const inp=document.getElementById(id); if(!inp) return;
+  const q=inp.value.trim().toLowerCase();
+  // אם מה שמוקלד תואם בדיוק קוד IATA קיים — נשמור אותו כבחירה
+  const exact=(BOOT.airports||[]).find(a=>a.iata.toLowerCase()===q);
+  if(exact) inp.dataset.iata=exact.iata; else if(!q) inp.dataset.iata='';
+  const list=document.getElementById(id+'_list');
+  let arr=(BOOT.airports||[]);
+  if(q){ arr=arr.filter(a=>a.iata.toLowerCase().includes(q)||(a.name_he||'').toLowerCase().includes(q)||(a.name_en||'').toLowerCase().includes(q)); }
+  arr=arr.slice(0,40);
+  if(!arr.length){ list.innerHTML=`<div class="ac-empty">${t('noMatch')}</div>`; list.classList.remove('hidden'); return; }
+  list.innerHTML=arr.map(a=>`<div class="ac-item" data-iata="${a.iata}" onmousedown="acPick(event,'${id}','${a.iata}')">
+    <b>${esc(a.iata)}</b> · ${esc(VIEW.lang==='en'?a.name_en:a.name_he)}${a.country?` <span style="color:var(--muted);font-size:12px">— ${esc(a.country)}</span>`:''}</div>`).join('');
+  list.classList.remove('hidden');
+}
+function acPick(ev,id,iata){
+  ev.preventDefault();   // לפני blur
+  const inp=document.getElementById(id);
+  inp.value=apLabel(iata); inp.dataset.iata=iata;
+  document.getElementById(id+'_list').classList.add('hidden');
+}
+function acBlur(id){ setTimeout(()=>{ const l=document.getElementById(id+'_list'); if(l) l.classList.add('hidden'); }, 150); }
+function acKey(ev,id){ if(ev.key==='Escape'){ document.getElementById(id+'_list').classList.add('hidden'); } }
+function acGet(id){ const inp=document.getElementById(id); if(!inp) return ''; if(inp.dataset.iata) return inp.dataset.iata;
+  const q=(inp.value||'').trim().toLowerCase(); const m=(BOOT.airports||[]).find(a=>a.iata.toLowerCase()===q); return m?m.iata:''; }
 function routeLabel(b){ if(!b.origin&&!b.dest) return t('none'); return (b.origin||'?')+' → '+(b.dest||'?'); }
 function isACMI(deptId){ const d=(BOOT.departments||[]).find(x=>x.id===deptId); return d&&d.code==='ACMI'; }
 
@@ -821,8 +866,8 @@ function renderNew(app){
       <div><label class="f">${t('pax')}</label><input id="n_pax" class="fld" type="number" min="1" value="1"></div>
     </div>
     <div class="rowflex">
-      <div><label class="f">${t('origin')}</label><select id="n_org" class="fld"><option value="">${t('none')}</option>${airportOptions('TLV')}</select></div>
-      <div><label class="f">${t('dest')}</label><select id="n_dst" class="fld"><option value="">${t('chooseDest')}</option>${airportOptions('')}</select></div>
+      <div><label class="f">${t('origin')}</label>${acInput('n_org','TLV')}</div>
+      <div><label class="f">${t('dest')}</label>${acInput('n_dst','',t('chooseDest'))}</div>
       ${acmi?`<div><label class="f">${t('wetOp')}</label><select id="n_wet" class="fld"><option value="">${t('none')}</option>${wetOpts}</select></div>`:''}
     </div>
     <label class="f">${t('quoteNotes')}</label><textarea id="n_note" class="fld" rows="2"></textarea>
@@ -840,8 +885,8 @@ async function createBooking(){
     pax:document.getElementById('n_pax').value||'1',
     pref_time:document.getElementById('n_time').value||'',
     wet_op:wetEl?(wetEl.value||''):'',
-    origin:document.getElementById('n_org').value.trim(),
-    dest:document.getElementById('n_dst').value.trim()});
+    origin:acGet('n_org'),
+    dest:acGet('n_dst')});
   if(!r.ok){ spin(false); document.getElementById('n_err').textContent=r.error; return; }
   const fi=document.getElementById('n_file');
   if(fi && fi.files.length){ const f=fi.files[0], b64=await fileToB64(f);
@@ -863,8 +908,8 @@ function renderUrgent(app){
       <div><label class="f">${t('pax')}</label><input id="u_pax" class="fld" type="number" min="1" value="1"></div>
     </div>
     <div class="rowflex">
-      <div><label class="f">${t('origin')}</label><select id="u_org" class="fld"><option value="">${t('none')}</option>${airportOptions('TLV')}</select></div>
-      <div><label class="f">${t('dest')}</label><select id="u_dst" class="fld"><option value="">${t('chooseDest')}</option>${airportOptions('')}</select></div>
+      <div><label class="f">${t('origin')}</label>${acInput('u_org','TLV')}</div>
+      <div><label class="f">${t('dest')}</label>${acInput('u_dst','',t('chooseDest'))}</div>
       <div><label class="f">${t('prefTime')} ${t('optional')}</label><input id="u_time" class="fld" type="time"></div>
     </div>
     <div class="rowflex">
@@ -885,7 +930,7 @@ async function submitUrgent(){
   spin(true);
   const r=await api('agent/quote/create',{token:SES.token,dept_id:dept,departure:dep,
     pax:document.getElementById('u_pax').value||'1',pref_time:document.getElementById('u_time').value||'',
-    origin:document.getElementById('u_org').value.trim(),dest:document.getElementById('u_dst').value.trim(),
+    origin:acGet('u_org'),dest:acGet('u_dst'),
     price:price,currency:document.getElementById('u_cur').value,
     trip:document.getElementById('u_trip').value||'',notes:document.getElementById('u_note').value||'',
     low_cost:document.getElementById('u_lowcost').checked?'Y':'N'});
@@ -970,8 +1015,8 @@ function renderEdit(app,b){
       <div><label class="f">${t('pax')}</label><input id="e_pax" class="fld" type="number" min="1" value="${b.pax||1}"></div>
     </div>
     <div class="rowflex">
-      <div><label class="f">${t('origin')}</label><select id="e_org" class="fld"><option value="">${t('none')}</option>${airportOptions(b.origin||'')}</select></div>
-      <div><label class="f">${t('dest')}</label><select id="e_dst" class="fld"><option value="">${t('chooseDest')}</option>${airportOptions(b.dest||'')}</select></div>
+      <div><label class="f">${t('origin')}</label>${acInput('e_org',b.origin||'')}</div>
+      <div><label class="f">${t('dest')}</label>${acInput('e_dst',b.dest||'',t('chooseDest'))}</div>
       ${acmi?`<div><label class="f">${t('wetOp')}</label><select id="e_wet" class="fld"><option value="">${t('none')}</option>${wetOpts}</select></div>`:''}
     </div>
     <label class="f">${t('quoteNotes')}</label><textarea id="e_note" class="fld" rows="2">${esc(b.quote_notes||'')}</textarea>
@@ -988,8 +1033,8 @@ async function saveEdit(id){
     pax:document.getElementById('e_pax').value||'',
     pref_time:document.getElementById('e_time').value||'',
     wet_op:wetEl?(wetEl.value||''):'',
-    origin:document.getElementById('e_org').value.trim(),
-    dest:document.getElementById('e_dst').value.trim()});
+    origin:acGet('e_org'),
+    dest:acGet('e_dst')});
   spin(false);
   if(!r.ok){ document.getElementById('e_err').textContent=r.error; return; }
   VIEW.editing=false; render();
