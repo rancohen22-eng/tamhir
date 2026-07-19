@@ -63,6 +63,12 @@ BEGIN
         city_en   VARCHAR2(80),
         country   VARCHAR2(60),
         is_active CHAR(1) DEFAULT ''Y'' NOT NULL)');
+  -- הרחבת עמודות שדות התעופה (שמות אנגליים ארוכים ממערכת התמחיר)
+  try('ALTER TABLE airports MODIFY (name_he VARCHAR2(200))');
+  try('ALTER TABLE airports MODIFY (name_en VARCHAR2(200))');
+  try('ALTER TABLE airports MODIFY (city_he VARCHAR2(200))');
+  try('ALTER TABLE airports MODIFY (city_en VARCHAR2(200))');
+  try('ALTER TABLE airports MODIFY (country VARCHAR2(100))');
 END;
 /
 
@@ -92,6 +98,7 @@ DECLARE
     MERGE INTO airports a USING (SELECT p_iata AS iata FROM dual) s ON (a.iata = s.iata)
     WHEN NOT MATCHED THEN INSERT (iata, name_he, name_en, city_he, city_en, country)
       VALUES (p_iata, p_he, p_en, p_he, p_en, p_country);
+  EXCEPTION WHEN OTHERS THEN NULL;  -- כשל בשורה בודדת לא יפיל את כל הקבוצה
   END;
 BEGIN
   seed_ap('TLV','תל אביב (בן גוריון)','Tel Aviv (Ben Gurion)','ישראל');
@@ -148,6 +155,7 @@ DECLARE
     MERGE INTO airports a USING (SELECT p_iata AS iata FROM dual) s ON (a.iata = s.iata)
     WHEN NOT MATCHED THEN INSERT (iata, name_he, name_en, city_he, city_en, country)
       VALUES (p_iata, p_he, p_en, p_he, p_en, p_country);
+  EXCEPTION WHEN OTHERS THEN NULL;  -- כשל בשורה בודדת לא יפיל את כל הקבוצה
   END;
 BEGIN
   seed_ap('AUH','אבו דאבי','Zayed International Airport','איחוד האמירויות הערביות');
