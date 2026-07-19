@@ -223,6 +223,23 @@ EXCEPTION WHEN OTHERS THEN NULL;
 END;
 /
 
+-- ── דיאגנוסטיקה זמנית: הדפסת שגיאת ה-INSERT האמיתית + ספירת שדות התעופה ──
+BEGIN
+  BEGIN
+    INSERT INTO airports (iata,name_he,name_en,city_he,city_en,country)
+    VALUES ('ZZ1','בדיקה','Diagnostic Test Airport International','בדיקה','Test','בדיקה');
+    DBMS_OUTPUT.PUT_LINE('DIAG-AIRPORTS: test insert OK');
+    ROLLBACK;
+  EXCEPTION WHEN OTHERS THEN
+    DBMS_OUTPUT.PUT_LINE('DIAG-AIRPORTS: test insert ERR = '||SQLERRM);
+  END;
+  DECLARE n NUMBER; BEGIN
+    SELECT COUNT(*) INTO n FROM airports;
+    DBMS_OUTPUT.PUT_LINE('DIAG-AIRPORTS: total rows = '||n);
+  END;
+END;
+/
+
 -- ── טבלת סשנים (טוקנים) ── נוצרת רק אם אינה קיימת, כדי שסשנים ישרדו פריסות
 -- (משתמשים נשארים מחוברים במובייל בין דeployments).
 DECLARE n NUMBER;
