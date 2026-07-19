@@ -16,6 +16,7 @@ import base64, json, os, textwrap
 HERE   = os.path.dirname(os.path.abspath(__file__))
 ROOT   = os.path.dirname(HERE)                       # bookings/
 APP     = os.path.join(ROOT, 'app', 'index.html')
+GUIDE   = os.path.join(ROOT, 'app', 'guide.html')
 ARKIA   = os.path.join(ROOT, 'assets', 'arkia-logo.svg')
 TELTOS  = os.path.join(ROOT, 'assets', 'teltos-logo.jpeg')
 APPICON = os.path.join(ROOT, 'assets', 'appicon.png')
@@ -55,6 +56,7 @@ def appends(target_where, data):
 
 def main():
     app_b64      = b64(APP)
+    guide_b64    = b64(GUIDE)
     arkia_b64    = b64(ARKIA)
     teltos_b64   = b64(TELTOS)
     appicon_b64  = b64(APPICON)
@@ -79,8 +81,10 @@ def main():
     L.append("INSERT INTO api_assets (name, mime, b64) VALUES ('teltos', 'image/jpeg', EMPTY_CLOB());")
     L.append("INSERT INTO api_assets (name, mime, b64) VALUES ('appicon', 'image/png', EMPTY_CLOB());")
     L.append("INSERT INTO api_assets (name, mime, b64) VALUES ('manifest', 'application/manifest+json', EMPTY_CLOB());")
+    L.append("INSERT INTO api_assets (name, mime, b64) VALUES ('guide', 'text/html; charset=utf-8', EMPTY_CLOB());")
 
     L += appends(("api_app SET",       "WHERE id=1"),              app_b64)
+    L += appends(("api_assets SET",    "WHERE name='guide'"),      guide_b64)
     L += appends(("api_assets SET",    "WHERE name='arkia'"),      arkia_b64)
     L += appends(("api_assets SET",    "WHERE name='teltos'"),     teltos_b64)
     L += appends(("api_assets SET",    "WHERE name='appicon'"),    appicon_b64)

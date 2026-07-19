@@ -122,6 +122,7 @@
       <span class="logobadge"><img src="/ords/arkia/api/assets/teltos" alt="Teltos" onerror="this.parentNode.className='logotext';this.replaceWith('טלטוס')"></span>
       <h1 id="app_title">הזמנת טיסות מטלטוס</h1>
       <span class="spacer"></span>
+      <button class="hbtn" id="guideBtn" title="מדריך">❓</button>
       <button class="hbtn" id="langBtn"></button>
       <button class="hbtn bell" id="bellBtn">🔔<span class="count hidden" id="bellCount">0</span></button>
       <span class="whoami" id="whoami"></span>
@@ -143,7 +144,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-18.9';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.1';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight
@@ -926,6 +927,7 @@ document.getElementById('lk_pw').addEventListener('keydown',e=>{ if(e.key==='Ent
 document.getElementById('langBtn').onclick=toggleLang;
 document.getElementById('logoutBtn').onclick=logout;
 document.getElementById('bellBtn').onclick=openBell;
+document.getElementById('guideBtn').onclick=()=>window.open(API+'assets/guide','_blank');
 tryRestore();   // מובייל: להישאר מחובר בין כניסות
 </script>
 </body>
