@@ -18,8 +18,10 @@ CREATE OR REPLACE PACKAGE booking_pkg AS
   g_app_url    CONSTANT VARCHAR2(300) := 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/app';
   g_assets_url CONSTANT VARCHAR2(300) := 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/assets/';
 
-  -- בונה גוף מייל HTML ממותג (ארקיע+טלטוס) עם פרטי ההזמנה וקישור "לחץ כאן"
-  FUNCTION booking_email_html (p_booking_id IN NUMBER, p_lang IN VARCHAR2) RETURN CLOB;
+  -- בונה גוף מייל HTML ממותג (ארקיע+טלטוס) עם פרטי ההזמנה וקישור "לחץ כאן".
+  -- אם p_approve_url מסופק — מתווסף כפתור "אשר את ההצעה" (אישור ישיר מהמייל).
+  FUNCTION booking_email_html (p_booking_id IN NUMBER, p_lang IN VARCHAR2,
+                               p_approve_url IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
 
   -- ── אימות / סיסמאות ──
   FUNCTION  hash_password (p_salt IN VARCHAR2, p_plain IN VARCHAR2) RETURN VARCHAR2;
@@ -117,7 +119,8 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
   --------------------------------------------------------------------------------
   -- גוף מייל HTML ממותג עם פרטי ההזמנה + קישור "לחץ כאן"
   --------------------------------------------------------------------------------
-  FUNCTION booking_email_html (p_booking_id IN NUMBER, p_lang IN VARCHAR2) RETURN CLOB IS
+  FUNCTION booking_email_html (p_booking_id IN NUMBER, p_lang IN VARCHAR2,
+                               p_approve_url IN VARCHAR2 DEFAULT NULL) RETURN CLOB IS
     l_en   BOOLEAN := (UPPER(p_lang) = 'EN');
     l_dir  VARCHAR2(3) := CASE WHEN l_en THEN 'ltr' ELSE 'rtl' END;
     r      bookings%ROWTYPE;
@@ -171,8 +174,11 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
           row_html(lbl('הערות','Notes'), r.quote_notes)||
         '</table>'||
         '<div style="text-align:center;margin-top:20px">'||
-          '<a href="'||l_link||'" style="display:inline-block;background:#0e7a4e;color:#fff;text-decoration:none;padding:12px 26px;border-radius:9px;font-weight:700;font-size:15px">'||
-          lbl('לחץ כאן לצפייה בהזמנה','Click here to view the booking')||'</a>'||
+          CASE WHEN p_approve_url IS NOT NULL THEN
+            '<a href="'||p_approve_url||'" style="display:inline-block;background:#0e7a4e;color:#fff;text-decoration:none;padding:12px 26px;border-radius:9px;font-weight:800;font-size:15px;margin:0 6px 10px">'||
+            lbl('✔ אשר את ההצעה','✔ Approve the quote')||'</a>' ELSE '' END||
+          '<a href="'||l_link||'" style="display:inline-block;background:'||CASE WHEN p_approve_url IS NOT NULL THEN '#123a86' ELSE '#0e7a4e' END||';color:#fff;text-decoration:none;padding:12px 26px;border-radius:9px;font-weight:700;font-size:15px;margin:0 6px 10px">'||
+          lbl('לצפייה בהזמנה','View the booking')||'</a>'||
         '</div>'||
       '</div>'||
       '<div style="background:#f7fafc;padding:10px 18px;color:#5b6b7f;font-size:11px;text-align:center">'||
