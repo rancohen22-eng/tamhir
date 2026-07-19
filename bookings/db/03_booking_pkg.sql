@@ -228,11 +228,13 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
         BEGIN
           APEX_UTIL.SET_SECURITY_GROUP_ID(APEX_UTIL.FIND_SECURITY_GROUP_ID('ARKIA'));
         EXCEPTION WHEN OTHERS THEN NULL; END;
+        -- p_body ו-p_body_html חייבים להיות מאותו טיפוס (CLOB) כדי למנוע PLS-00307
+        -- (APEX_MAIL.SEND עמוס-הגדרות ל-VARCHAR2/CLOB).
         APEX_MAIL.SEND(
           p_to        => l_email,
           p_from      => g_mail_from,
           p_subj      => l_subj,
-          p_body      => l_msg || CHR(10) || g_app_url || '#b=' || p_booking_id,
+          p_body      => TO_CLOB(l_msg || CHR(10) || g_app_url || '#b=' || p_booking_id),
           p_body_html => booking_email_html(p_booking_id, l_lang));
         BEGIN APEX_MAIL.PUSH_QUEUE; EXCEPTION WHEN OTHERS THEN NULL; END;
       EXCEPTION
