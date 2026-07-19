@@ -23,6 +23,22 @@ APPICON = os.path.join(ROOT, 'assets', 'appicon.png')
 OUT     = os.path.join(HERE, 'install_ui.sql')
 CHUNK   = 3800                                        # < 4000 (מגבלת ליטרל VARCHAR2)
 
+# Service Worker — מבטיח שה-PWA תמיד יטען את גרסת ה-HTML העדכנית (network-first),
+# כדי שעדכונים לא ייתקעו במטמון של מסך הבית. מוגש מ-/ords/arkia/api/sw (scope /api/).
+SW_JS = r"""
+self.addEventListener('install', function(e){ self.skipWaiting(); });
+self.addEventListener('activate', function(e){ e.waitUntil(self.clients.claim()); });
+self.addEventListener('fetch', function(e){
+  var u = e.request.url;
+  // תמיד לטעון את ה-HTML של האפליקציה מהרשת (עוקף מטמון); נופלים למטמון רק אם אין רשת.
+  if (u.indexOf('/ords/arkia/api/app') !== -1) {
+    e.respondWith(
+      fetch(e.request, { cache: 'reload' }).catch(function(){ return caches.match(e.request); })
+    );
+  }
+});
+"""
+
 # מניפסט PWA (הוספה למסך הבית). מוגש מ-ORDS same-origin עם האפליקציה.
 MANIFEST = {
     "name": "הזמנת טיסות מטלטוס",
@@ -62,6 +78,7 @@ def main():
     appicon_b64  = b64(APPICON)
     manifest_b64 = base64.b64encode(
         json.dumps(MANIFEST, ensure_ascii=False).encode('utf-8')).decode('ascii')
+    sw_b64       = base64.b64encode(SW_JS.encode('utf-8')).decode('ascii')
 
     L = []
     L.append("--------------------------------------------------------------------------------")
@@ -82,9 +99,11 @@ def main():
     L.append("INSERT INTO api_assets (name, mime, b64) VALUES ('appicon', 'image/png', EMPTY_CLOB());")
     L.append("INSERT INTO api_assets (name, mime, b64) VALUES ('manifest', 'application/manifest+json', EMPTY_CLOB());")
     L.append("INSERT INTO api_assets (name, mime, b64) VALUES ('guide', 'text/html; charset=utf-8', EMPTY_CLOB());")
+    L.append("INSERT INTO api_assets (name, mime, b64) VALUES ('sw', 'application/javascript', EMPTY_CLOB());")
 
     L += appends(("api_app SET",       "WHERE id=1"),              app_b64)
     L += appends(("api_assets SET",    "WHERE name='guide'"),      guide_b64)
+    L += appends(("api_assets SET",    "WHERE name='sw'"),         sw_b64)
     L += appends(("api_assets SET",    "WHERE name='arkia'"),      arkia_b64)
     L += appends(("api_assets SET",    "WHERE name='teltos'"),     teltos_b64)
     L += appends(("api_assets SET",    "WHERE name='appicon'"),    appicon_b64)
@@ -99,6 +118,10 @@ def main():
     L.append("  BEGIN ORDS.DEFINE_TEMPLATE(p_module_name=>'arkia.api',p_pattern=>'assets/:name'); EXCEPTION WHEN OTHERS THEN NULL; END;")
     L.append("  BEGIN ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api',p_pattern=>'assets/:name',p_method=>'GET',p_source_type=>ORDS.source_type_media,")
     L.append("    p_source=>q'~SELECT mime AS content_type, APEX_WEB_SERVICE.CLOBBASE642BLOB(b64) AS content FROM api_assets WHERE name=:name~'); EXCEPTION WHEN OTHERS THEN NULL; END;")
+    L.append("  -- Service Worker בשורש /ords/arkia/api/ כדי ש-scope יכסה את /app")
+    L.append("  BEGIN ORDS.DEFINE_TEMPLATE(p_module_name=>'arkia.api',p_pattern=>'sw'); EXCEPTION WHEN OTHERS THEN NULL; END;")
+    L.append("  BEGIN ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api',p_pattern=>'sw',p_method=>'GET',p_source_type=>ORDS.source_type_media,")
+    L.append("    p_source=>q'~SELECT 'application/javascript' AS content_type, APEX_WEB_SERVICE.CLOBBASE642BLOB(b64) AS content FROM api_assets WHERE name='sw'~'); EXCEPTION WHEN OTHERS THEN NULL; END;")
     L.append("  COMMIT;")
     L.append("END;")
     L.append("/")

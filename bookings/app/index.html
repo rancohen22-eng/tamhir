@@ -145,7 +145,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-19.6';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.7';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight.
@@ -941,6 +941,8 @@ document.getElementById('langBtn').onclick=toggleLang;
 document.getElementById('logoutBtn').onclick=logout;
 document.getElementById('bellBtn').onclick=openBell;
 document.getElementById('guideBtn').onclick=()=>window.open(API+'assets/guide','_blank');
+// Service Worker — דואג שה-PWA תמיד יטען את הגרסה העדכנית (מונע היתקעות במטמון)
+if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/ords/arkia/api/sw'); }catch(e){} }
 tryRestore();   // מובייל: להישאר מחובר בין כניסות
 </script>
 </body>
