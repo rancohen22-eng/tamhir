@@ -282,6 +282,7 @@ CREATE OR REPLACE PACKAGE api_pkg AS
   -- ── ניהול (ADMIN בלבד) ──
   FUNCTION  admin_users  (p_token VARCHAR2) RETURN CLOB;
   FUNCTION  admin_create_dept (p_token VARCHAR2, p_code VARCHAR2, p_name_he VARCHAR2, p_name_en VARCHAR2) RETURN CLOB;
+  FUNCTION  admin_update_dept (p_token VARCHAR2, p_dept_id NUMBER, p_code VARCHAR2, p_name_he VARCHAR2, p_name_en VARCHAR2) RETURN CLOB;
   FUNCTION  admin_create_user (p_token VARCHAR2, p_username VARCHAR2, p_full VARCHAR2, p_email VARCHAR2,
                                p_dept_id NUMBER, p_role VARCHAR2, p_password VARCHAR2) RETURN CLOB;
   FUNCTION  admin_update_user (p_token VARCHAR2, p_user_id NUMBER, p_full VARCHAR2, p_email VARCHAR2,
@@ -854,6 +855,21 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
   EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
   END admin_create_dept;
 
+  -- עדכון שם/קוד מחלקה קיימת
+  FUNCTION admin_update_dept (p_token VARCHAR2, p_dept_id NUMBER, p_code VARCHAR2,
+                              p_name_he VARCHAR2, p_name_en VARCHAR2) RETURN CLOB IS
+    l_uid NUMBER := admin_guard(p_token);
+  BEGIN
+    IF p_name_he IS NULL THEN RETURN err('no_name'); END IF;
+    UPDATE departments
+       SET name_he   = p_name_he,
+           name_en   = NVL(p_name_en, p_name_he),
+           dept_code = NVL(p_code, dept_code)
+     WHERE dept_id = p_dept_id;
+    COMMIT; RETURN '{"ok":true}';
+  EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
+  END admin_update_dept;
+
   FUNCTION admin_create_user (p_token VARCHAR2, p_username VARCHAR2, p_full VARCHAR2, p_email VARCHAR2,
                               p_dept_id NUMBER, p_role VARCHAR2, p_password VARCHAR2) RETURN CLOB IS
     l_uid NUMBER := admin_guard(p_token);
@@ -1229,6 +1245,12 @@ BEGIN
   ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/dept/create', p_method=>'POST',
     p_source_type=>ORDS.source_type_plsql,
     p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_create_dept(:token, :code, :name_he, :name_en)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
+
+  -- admin/dept/update (POST = עריכת שם/קוד מחלקה)
+  ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'admin/dept/update');
+  ORDS.DEFINE_HANDLER(p_module_name=>'arkia.api', p_pattern=>'admin/dept/update', p_method=>'POST',
+    p_source_type=>ORDS.source_type_plsql,
+    p_source=>q'[BEGIN api_pkg.emit(api_pkg.admin_update_dept(:token, :dept_id, :code, :name_he, :name_en)); EXCEPTION WHEN OTHERS THEN api_pkg.emit(api_pkg.err(SQLERRM)); END;]');
 
   -- admin/user/create (POST)
   ORDS.DEFINE_TEMPLATE(p_module_name => 'arkia.api', p_pattern => 'admin/user/create');

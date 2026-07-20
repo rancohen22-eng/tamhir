@@ -153,7 +153,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-19.13';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.14';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight.
@@ -522,8 +522,14 @@ async function renderAdmin(app){
     <p class="muted" style="font-size:12px;margin-top:6px">${t('usageNote')}</p>
   </div>`:''}
   <div class="card"><h2>${t('departments')}</h2>
-    <div class="tablewrap"><table><thead><tr><th>${t('name')}</th><th>${t('code')}</th></tr></thead><tbody>${
-      BOOT.departments.map(d=>`<tr><td>${esc(deptName(d))}</td><td>${esc(d.code)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="tablewrap"><table><thead><tr><th>${t('name')} (HE)</th><th>Name (EN)</th><th>${t('code')}</th><th></th></tr></thead><tbody>${
+      BOOT.departments.map(d=>`<tr>
+        <td><input id="edh_${d.id}" class="fld" style="margin:0" value="${esc(d.name_he||'')}"></td>
+        <td><input id="ede_${d.id}" class="fld" style="margin:0" dir="ltr" value="${esc(d.name_en||'')}"></td>
+        <td><input id="edc_${d.id}" class="fld" style="margin:0;max-width:110px" dir="ltr" value="${esc(d.code||'')}"></td>
+        <td style="white-space:nowrap"><button class="btn sm" onclick="saveDept(${d.id})">${t('save')}</button></td>
+      </tr>`).join('')}</tbody></table></div>
+    <div id="deptEditErr" style="color:var(--danger);font-size:13px"></div>
     <div class="rowflex" style="margin-top:8px">
       <div><input id="ad_code" class="fld" placeholder="${t('code')}"></div>
       <div><input id="ad_he" class="fld" placeholder="שם (עברית)"></div>
@@ -646,6 +652,12 @@ async function addDept(){
   if(!code||!he){ document.getElementById('ad_err').textContent=t('required2'); return; }
   spin(true); const r=await api('admin/dept/create',{token:SES.token,code:code,name_he:he,name_en:en}); await refreshBoot(); spin(false);
   if(!r.ok){ document.getElementById('ad_err').textContent=r.error; return; } render();
+}
+async function saveDept(id){
+  const he=document.getElementById('edh_'+id).value.trim(), en=document.getElementById('ede_'+id).value.trim(), code=document.getElementById('edc_'+id).value.trim();
+  if(!he){ document.getElementById('deptEditErr').textContent=t('required2'); return; }
+  spin(true); const r=await api('admin/dept/update',{token:SES.token,dept_id:id,code:code,name_he:he,name_en:en}); await refreshBoot(); spin(false);
+  if(!r.ok){ document.getElementById('deptEditErr').textContent=r.error; return; } render();
 }
 async function setDeptApprover(deptId){
   const uid=document.getElementById('da_'+deptId).value;
