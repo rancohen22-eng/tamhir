@@ -153,7 +153,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-19.14';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.15';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight.
@@ -206,6 +206,7 @@ const T = {
     airports:"שדות תעופה",country:"מדינה",addAirport:"הוסף/עדכן שדה תעופה",activate:"הפעל",deactivate:"השבת",
     resetEmailed:"נשלח מייל עם סיסמה זמנית למשתמש:",sendToAgents:"שלח לכל הסוכנים",chooseDest:"בחר יעד",openPool:"פתוחה לכל הסוכנים",
     typeToSearch:"הקלד קוד או שם יעד…",noMatch:"לא נמצאו יעדים תואמים",
+    welcomeSent:"נשלח מייל התחברות ראשוני אל",welcomeFailed:"המשתמש נוצר, אך שליחת מייל ההתחברות נכשלה — מסרו את הסיסמה ידנית או השתמשו ב'איפוס סיסמה'.",
     del:"מחק",delUser:"מחיקת משתמש",confirmDel:"למחוק את המשתמש?",loginLog:"לוג כניסות",time:"זמן",cancelBooking:"בטל הזמנה",
     emailNotif:"התראות במייל",emailOn:"מקבל התראות במייל",emailOff:"התראות מייל כבויות",
     R_INITIATOR:"יוזם",R_APPROVER:"מאשר",R_AGENT:"סוכן",R_FINANCE:"פיננס",R_ADMIN:"מנהל מערכת",
@@ -238,6 +239,7 @@ const T = {
     airports:"Airports",country:"Country",addAirport:"Add/update airport",activate:"Activate",deactivate:"Deactivate",
     resetEmailed:"A temporary password was emailed to the user:",sendToAgents:"Send to all agents",chooseDest:"Choose destination",openPool:"Open to all agents",
     typeToSearch:"Type a code or destination…",noMatch:"No matching destinations",
+    welcomeSent:"A welcome/login email was sent to",welcomeFailed:"User created, but the login email failed — share the password manually or use 'Reset password'.",
     delUser:"Delete user",confirmDel:"Delete this user?",loginLog:"Login log",time:"Time",cancelBooking:"Cancel booking",
     emailNotif:"Email notifications",emailOn:"Email notifications on",emailOff:"Email notifications off",
     R_INITIATOR:"Initiator",R_APPROVER:"Approver",R_AGENT:"Agent",R_FINANCE:"Finance",R_ADMIN:"Admin",
@@ -676,7 +678,10 @@ async function addUser(){
   const r=await api('admin/user/create',{token:SES.token,username:un,full:fn,email:document.getElementById('au_em').value.trim(),
     dept_id:document.getElementById('au_dept').value||'',role:document.getElementById('au_role').value,password:document.getElementById('au_pw').value.trim()});
   await refreshBoot(); spin(false);
-  if(!r.ok){ document.getElementById('au_err').textContent=r.error; return; } render();
+  if(!r.ok){ document.getElementById('au_err').textContent=r.error; return; }
+  const em=document.getElementById('au_em').value.trim();
+  if(em){ alert(r.emailed ? t('welcomeSent')+' '+em : t('welcomeFailed')); }
+  render();
 }
 function editUser(i){
   const u=ADMIN_USERS[i];

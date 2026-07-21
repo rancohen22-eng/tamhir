@@ -873,7 +873,7 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
   FUNCTION admin_create_user (p_token VARCHAR2, p_username VARCHAR2, p_full VARCHAR2, p_email VARCHAR2,
                               p_dept_id NUMBER, p_role VARCHAR2, p_password VARCHAR2) RETURN CLOB IS
     l_uid NUMBER := admin_guard(p_token);
-    l_new NUMBER;
+    l_new NUMBER; l_pw VARCHAR2(40); l_emailed VARCHAR2(5) := 'false'; l_html CLOB;
   BEGIN
     INSERT INTO app_users (username, full_name, email, dept_id, pref_lang)
     VALUES (LOWER(p_username), p_full, p_email, p_dept_id, 'HE') RETURNING user_id INTO l_new;
@@ -884,8 +884,44 @@ CREATE OR REPLACE PACKAGE BODY api_pkg AS
     IF p_role = 'APPROVER' AND p_dept_id IS NOT NULL THEN
       INSERT INTO dept_approvers (dept_id, approver_user_id) VALUES (p_dept_id, l_new);
     END IF;
-    booking_pkg.set_password(LOWER(p_username), NVL(p_password, 'Arkia2026!'));
-    COMMIT; RETURN '{"ok":true,"id":'||l_new||'}';
+    l_pw := NVL(p_password, 'Arkia2026!');
+    booking_pkg.set_password(LOWER(p_username), l_pw);
+    COMMIT;
+
+    -- מייל התחברות ראשוני (best-effort) — שם משתמש + סיסמה זמנית + קישור
+    IF p_email IS NOT NULL THEN
+      l_html :=
+        '<div dir="rtl" style="font-family:Heebo,Arial,sans-serif;background:#f2f5f9;padding:16px">'||
+        '<div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;border:1px solid #e2e8f0;overflow:hidden">'||
+        '<div style="background:#123a86;padding:14px;text-align:center">'||
+        '<img src="'||booking_pkg.g_assets_url||'arkia" height="26" style="background:#fff;border-radius:6px;padding:3px 7px;vertical-align:middle">'||
+        '<span style="color:#fff;margin:0 10px">&#10005;</span>'||
+        '<img src="'||booking_pkg.g_assets_url||'teltos" height="26" style="background:#fff;border-radius:6px;padding:3px 7px;vertical-align:middle"></div>'||
+        '<div style="padding:20px">'||
+        '<h2 style="color:#123a86;margin:0 0 6px">ברוכים הבאים למערכת הזמנת טיסות מטלטוס</h2>'||
+        '<p style="color:#5b6b7f;margin:0 0 14px">נוצר עבורך חשבון במערכת. אלו פרטי הכניסה שלך:</p>'||
+        '<table style="width:100%;border-collapse:collapse;font-size:15px">'||
+        '<tr><td style="color:#5b6b7f;padding:6px 0">שם משתמש</td><td style="font-weight:700" dir="ltr">'||LOWER(p_username)||'</td></tr>'||
+        '<tr><td style="color:#5b6b7f;padding:6px 0">סיסמה זמנית</td><td style="font-weight:700" dir="ltr">'||l_pw||'</td></tr>'||
+        '</table>'||
+        '<div style="text-align:center;margin-top:18px">'||
+        '<a href="'||booking_pkg.g_app_url||'" style="display:inline-block;background:#0e7a4e;color:#fff;text-decoration:none;padding:12px 26px;border-radius:9px;font-weight:800;font-size:15px">כניסה למערכת</a>'||
+        '</div>'||
+        '<p style="color:#5b6b7f;font-size:12px;margin-top:16px">מומלץ לשמור את הסיסמה בדפדפן/מכשיר לכניסות הבאות. אם המייל הגיע לספאם — סמנו "לא ספאם".</p>'||
+        '</div>'||
+        '<div style="background:#f7fafc;padding:10px 18px;color:#5b6b7f;font-size:11px;text-align:center">הזמנת טיסות מטלטוס · ארקיע · לשימוש פנימי</div>'||
+        '</div></div>';
+      BEGIN
+        BEGIN APEX_UTIL.SET_SECURITY_GROUP_ID(APEX_UTIL.FIND_SECURITY_GROUP_ID('ARKIA')); EXCEPTION WHEN OTHERS THEN NULL; END;
+        APEX_MAIL.SEND(p_to => p_email, p_from => booking_pkg.g_mail_from,
+          p_subj => 'ברוכים הבאים — מערכת הזמנת טיסות מטלטוס (פרטי כניסה)',
+          p_body => TO_CLOB('שם משתמש: '||LOWER(p_username)||CHR(10)||'סיסמה זמנית: '||l_pw||CHR(10)||'כניסה: '||booking_pkg.g_app_url),
+          p_body_html => l_html);
+        BEGIN APEX_MAIL.PUSH_QUEUE; EXCEPTION WHEN OTHERS THEN NULL; END;
+        l_emailed := 'true';
+      EXCEPTION WHEN OTHERS THEN l_emailed := 'false'; END;
+    END IF;
+    RETURN '{"ok":true,"id":'||l_new||',"emailed":'||l_emailed||'}';
   EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN err(SQLERRM);
   END admin_create_user;
 
