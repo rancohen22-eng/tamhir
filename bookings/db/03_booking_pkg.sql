@@ -23,6 +23,10 @@ CREATE OR REPLACE PACKAGE booking_pkg AS
   FUNCTION booking_email_html (p_booking_id IN NUMBER, p_lang IN VARCHAR2,
                                p_approve_url IN VARCHAR2 DEFAULT NULL) RETURN CLOB;
 
+  -- רושם מייל שנשלח ל-email_log ומחזיר פיקסל 1x1 למעקב קריאה (להטמעה בגוף ה-HTML).
+  FUNCTION track_pixel (p_booking_id IN NUMBER, p_recipient IN VARCHAR2, p_user_id IN NUMBER,
+                        p_kind IN VARCHAR2, p_subject IN VARCHAR2) RETURN VARCHAR2;
+
   -- ── אימות / סיסמאות ──
   FUNCTION  hash_password (p_salt IN VARCHAR2, p_plain IN VARCHAR2) RETURN VARCHAR2;
   PROCEDURE set_password  (p_username IN VARCHAR2, p_plain IN VARCHAR2);
@@ -195,6 +199,19 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
            lbl('לחץ כאן','Click here')||'</a></div>';
   END booking_email_html;
 
+  -- רושם שורה ל-email_log ומחזיר פיקסל מעקב 1x1 (autonomous — נשמר ללא תלות ב-caller).
+  FUNCTION track_pixel (p_booking_id IN NUMBER, p_recipient IN VARCHAR2, p_user_id IN NUMBER,
+                        p_kind IN VARCHAR2, p_subject IN VARCHAR2) RETURN VARCHAR2 IS
+    PRAGMA AUTONOMOUS_TRANSACTION;
+    l_token VARCHAR2(70) := RAWTOHEX(SYS_GUID()) || RAWTOHEX(SYS_GUID());
+  BEGIN
+    INSERT INTO email_log (token, booking_id, recipient, user_id, kind, subject)
+      VALUES (l_token, p_booking_id, p_recipient, p_user_id, p_kind, SUBSTR(p_subject,1,300));
+    COMMIT;
+    RETURN '<img src="'||REPLACE(g_app_url,'/app','')||'/track?t='||l_token||'" width="1" height="1" alt="" style="display:none">';
+  EXCEPTION WHEN OTHERS THEN ROLLBACK; RETURN '';
+  END track_pixel;
+
   --------------------------------------------------------------------------------
   -- שליחת התראה (פעמון + מייל) למשתמש בודד, בשפת ההעדפה שלו
   --------------------------------------------------------------------------------
@@ -248,7 +265,8 @@ CREATE OR REPLACE PACKAGE BODY booking_pkg AS
           p_from      => g_mail_from,
           p_subj      => l_subj,
           p_body      => TO_CLOB(l_msg || CHR(10) || g_app_url || '#b=' || p_booking_id),
-          p_body_html => booking_email_html(p_booking_id, l_lang));
+          p_body_html => booking_email_html(p_booking_id, l_lang)
+                         || track_pixel(p_booking_id, l_email, p_user_id, 'STATUS:'||p_status, l_subj));
         FOR f IN (SELECT filename, mime_type, file_blob FROM booking_files WHERE booking_id = p_booking_id) LOOP
           BEGIN
             APEX_MAIL.ADD_ATTACHMENT(p_mail_id => l_mail_id, p_attachment => f.file_blob,

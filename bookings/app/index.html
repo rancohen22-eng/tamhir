@@ -153,7 +153,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-19.15';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.16';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight.
@@ -207,6 +207,9 @@ const T = {
     resetEmailed:"נשלח מייל עם סיסמה זמנית למשתמש:",sendToAgents:"שלח לכל הסוכנים",chooseDest:"בחר יעד",openPool:"פתוחה לכל הסוכנים",
     typeToSearch:"הקלד קוד או שם יעד…",noMatch:"לא נמצאו יעדים תואמים",
     welcomeSent:"נשלח מייל התחברות ראשוני אל",welcomeFailed:"המשתמש נוצר, אך שליחת מייל ההתחברות נכשלה — מסרו את הסיסמה ידנית או השתמשו ב'איפוס סיסמה'.",
+    emailLog:"לוג מיילים",emailLogNote:"מעקב קריאה מבוסס פיקסל — אינדיקציה בלבד. חלק מלקוחות המייל (Apple Mail, פרוקסי ארגוני) עלולים לסמן 'נקרא' מראש, ואחרים שחוסמים תמונות לא ירשמו קריאה כלל.",
+    recipient:"נמען",kind:"סוג",sentAt:"נשלח",readQ:"נקרא?",readAt:"מתי נקרא",read:"נקראו",yes:"כן",no:"לא",
+    emkAgentReq:"בקשה לסוכן",emkApprover:"אישור למאשר",emkWelcome:"מייל התחברות",emkReset:"איפוס סיסמה",emkStatus:"עדכון סטטוס",
     del:"מחק",delUser:"מחיקת משתמש",confirmDel:"למחוק את המשתמש?",loginLog:"לוג כניסות",time:"זמן",cancelBooking:"בטל הזמנה",
     emailNotif:"התראות במייל",emailOn:"מקבל התראות במייל",emailOff:"התראות מייל כבויות",
     R_INITIATOR:"יוזם",R_APPROVER:"מאשר",R_AGENT:"סוכן",R_FINANCE:"פיננס",R_ADMIN:"מנהל מערכת",
@@ -240,6 +243,9 @@ const T = {
     resetEmailed:"A temporary password was emailed to the user:",sendToAgents:"Send to all agents",chooseDest:"Choose destination",openPool:"Open to all agents",
     typeToSearch:"Type a code or destination…",noMatch:"No matching destinations",
     welcomeSent:"A welcome/login email was sent to",welcomeFailed:"User created, but the login email failed — share the password manually or use 'Reset password'.",
+    emailLog:"Email log",emailLogNote:"Read tracking is pixel-based — indicative only. Some clients (Apple Mail, corporate proxies) may pre-mark 'read', and image-blocking clients never register a read.",
+    recipient:"Recipient",kind:"Type",sentAt:"Sent",readQ:"Read?",readAt:"Read at",read:"read",yes:"Yes",no:"No",
+    emkAgentReq:"Agent request",emkApprover:"Approver approval",emkWelcome:"Welcome email",emkReset:"Password reset",emkStatus:"Status update",
     delUser:"Delete user",confirmDel:"Delete this user?",loginLog:"Login log",time:"Time",cancelBooking:"Cancel booking",
     emailNotif:"Email notifications",emailOn:"Email notifications on",emailOff:"Email notifications off",
     R_INITIATOR:"Initiator",R_APPROVER:"Approver",R_AGENT:"Agent",R_FINANCE:"Finance",R_ADMIN:"Admin",
@@ -437,6 +443,7 @@ function tabsFor(){
   if(hasRole('FINANCE')||hasRole('ADMIN')) tabs.push(['finance',t('finance')]);
   if(hasRole('ADMIN')) tabs.push(['admin',t('admin')]);
   if(hasRole('ADMIN')) tabs.push(['log',t('loginLog')]);
+  if(hasRole('ADMIN')) tabs.push(['emaillog',t('emailLog')]);
   return tabs;
 }
 async function refreshUnread(){
@@ -461,6 +468,7 @@ function render(){
   if(VIEW.tab==='finance') return renderFinance(app);
   if(VIEW.tab==='admin') return renderAdmin(app);
   if(VIEW.tab==='log') return renderLog(app);
+  if(VIEW.tab==='emaillog') return renderEmailLog(app);
   return renderBookings(app);
 }
 
@@ -744,6 +752,36 @@ async function renderLog(app){
 }
 function filterLg(){ const q=document.getElementById('lgSearch').value.toLowerCase();
   document.querySelectorAll('#lgTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
+
+/* ── לוג מיילים + מעקב קריאה (ADMIN) ── */
+async function renderEmailLog(app){
+  app.innerHTML=`<div class="card"><h2>${t('emailLog')}</h2><div class="muted">…</div></div>`;
+  const r=await api('admin/emaillog',{token:SES.token});
+  const list=r.ok?(r.emails||[]):[];
+  const readCnt=list.filter(e=>e.opened==='Y').length;
+  app.innerHTML=`<div class="card"><h2>${t('emailLog')} <span class="muted" style="font-size:12px">(${list.length} · ${t('read')}: ${readCnt})</span></h2>
+    <p class="muted" style="font-size:12px;margin:0 0 8px">${t('emailLogNote')}</p>
+    <input id="emSearch" class="fld" placeholder="${t('search')}" oninput="filterEm()">
+    <div class="tablewrap" style="margin-top:8px"><table id="emTable"><thead><tr>
+      <th>${t('recipient')}</th><th>${t('kind')}</th><th>#</th><th>${t('sentAt')}</th><th>${t('readQ')}</th><th>${t('readAt')}</th></tr></thead>
+    <tbody>${list.map(e=>`<tr>
+      <td dir="ltr">${esc(e.to||'')}</td>
+      <td>${esc(emKind(e.kind))}</td>
+      <td>${e.booking_id?('#'+e.booking_id):'—'}</td>
+      <td dir="ltr">${esc(e.sent||'')}</td>
+      <td>${e.opened==='Y'?`<span class="pill" style="background:var(--accent);color:#fff">✓ ${t('yes')}</span>`:`<span class="muted">${t('no')}</span>`}</td>
+      <td dir="ltr">${esc(e.opened_at||'—')}${e.open_count>1?` <span class="muted">(${e.open_count})</span>`:''}</td>
+    </tr>`).join('')||`<tr><td colspan="6" class="muted">${t('none')}</td></tr>`}</tbody></table></div></div>`;
+}
+function emKind(k){ if(!k) return '—';
+  if(k==='AGENT_REQUEST') return t('emkAgentReq');
+  if(k==='APPROVER_QUOTE') return t('emkApprover');
+  if(k==='WELCOME') return t('emkWelcome');
+  if(k==='RESET') return t('emkReset');
+  if(k&&k.indexOf('STATUS:')===0){ const s=k.slice(7); return t('emkStatus')+': '+stLabel(s); }
+  return k; }
+function filterEm(){ const q=document.getElementById('emSearch').value.toLowerCase();
+  document.querySelectorAll('#emTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
 
 /* ── כספים / דוחות ── */
 let FIN_ALL=[];        // כל ההזמנות
