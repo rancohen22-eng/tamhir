@@ -1,0 +1,43 @@
+name: Daily Fuel Price Email
+
+on:
+  schedule:
+    # 05:00 UTC ≈ 08:00 שעון ישראל בקיץ / 07:00 בחורף.
+    # שים לב: ה-cron של GitHub פועל ב-UTC וללא מעבר שעון קיץ/חורף.
+    - cron: '0 5 * * *'
+  workflow_dispatch: {}   # מאפשר הרצה ידנית לבדיקה מלשונית Actions
+
+# מונע ריצות חופפות אם הרצה ידנית מתנגשת עם המתוזמנת
+concurrency:
+  group: daily-fuel-email
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Build fuel report
+        env:
+          EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+        run: node scripts/fuel-report.mjs
+
+      - name: Send email
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_APP_PASSWORD }}
+          from: Fuel Report <${{ secrets.MAIL_USERNAME }}>
+          to: ${{ secrets.MAIL_TO }}
+          subject: file://out/subject.txt
+          html_body: file://out/email.html
