@@ -1,0 +1,1239 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta http-equiv="Cache-Control" content="no-store, max-age=0">
+<title>הזמנת טיסות מטלטוס · ארקיע</title>
+<!-- PWA: הוספה למסך הבית -->
+<link rel="manifest" href="/ords/arkia/api/assets/manifest?v=7">
+<meta name="theme-color" content="#123a86">
+<link rel="apple-touch-icon" href="/ords/arkia/api/assets/appicon">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="הזמנות טלטוס">
+<style>
+  :root{
+    --bg:#f2f5f9; --card:#fff; --ink:#0e1c2e; --muted:#5b6b7f;
+    --brand:#123a86; --brand2:#1e63b8; --accent:#0e7a4e; --line:#e2e8f0;
+    --danger:#b3261e; --warn:#b26b00; --chip:#e8eff7;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{background:var(--bg);color:var(--ink);font-family:-apple-system,"Segoe UI",Roboto,"Heebo",Arial,sans-serif;font-size:15px;line-height:1.45}
+  .hidden{display:none!important}
+  button{font-family:inherit}
+  #lock{min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:24px;background:linear-gradient(160deg,var(--brand),var(--brand2))}
+  #lock .panel{width:100%;max-width:380px;background:var(--card);border-radius:16px;padding:26px 22px;box-shadow:0 10px 30px rgba(0,0,0,.25);text-align:center}
+  #lock .wm{font-size:30px;font-weight:800;color:var(--brand);letter-spacing:1px;margin-bottom:6px}
+  #lock h1{margin:6px 0 2px;font-size:18px;color:var(--brand)}
+  #lock p{margin:0 0 16px;color:var(--muted);font-size:13px}
+  .fld{width:100%;padding:11px 13px;font-size:15px;border:1px solid var(--line);border-radius:10px;margin:6px 0;background:#fff;color:var(--ink)}
+  .fld:focus{outline:2px solid var(--brand2);border-color:transparent}
+  #unlockBtn{width:100%;margin-top:10px;padding:12px;font-size:16px;font-weight:700;color:#fff;background:var(--brand);border:0;border-radius:10px;cursor:pointer}
+  #lockErr{color:var(--danger);font-size:13px;min-height:18px;margin-top:8px}
+  .demo{margin-top:14px;font-size:12px;color:var(--muted);text-align:start;background:var(--chip);border-radius:10px;padding:10px 12px}
+  .demo b{color:var(--brand)} .demo code{background:#fff;padding:1px 5px;border-radius:5px}
+  header.app{position:sticky;top:0;z-index:20;background:linear-gradient(160deg,var(--brand),var(--brand2));color:#fff;padding:10px 14px;box-shadow:0 2px 10px rgba(0,0,0,.15)}
+  header.app .row{display:flex;align-items:center;gap:10px}
+  .logobadge{background:#fff;border-radius:8px;padding:4px 8px;line-height:0;flex:0 0 auto}
+  .logobadge img{height:22px;display:block}
+  .logotext{font-weight:800;color:var(--brand);font-size:15px;padding:2px 4px}
+  header.app h1{margin:0;font-size:15px;font-weight:700;white-space:nowrap}
+  .spacer{flex:1}
+  .hbtn{color:#fff;background:rgba(255,255,255,.16);border:1px solid rgba(255,255,255,.4);font-size:13px;font-weight:600;padding:6px 10px;border-radius:8px;cursor:pointer;white-space:nowrap}
+  .hbtn:hover{background:rgba(255,255,255,.28)}
+  .bell{position:relative}
+  .bell .count{position:absolute;top:-6px;inset-inline-end:-6px;background:var(--danger);color:#fff;font-size:11px;font-weight:700;min-width:17px;height:17px;border-radius:9px;padding:0 4px;display:flex;align-items:center;justify-content:center}
+  .whoami{font-size:12px;opacity:.9;white-space:nowrap}
+  nav.tabs{display:flex;gap:4px;overflow-x:auto;margin-top:8px}
+  nav.tabs button{flex:0 0 auto;background:rgba(255,255,255,.14);color:#fff;border:0;padding:7px 12px;border-radius:8px 8px 0 0;font-size:13.5px;cursor:pointer;white-space:nowrap}
+  nav.tabs button.sel{background:var(--bg);color:var(--brand);font-weight:700}
+  main{max-width:1080px;margin:0 auto;padding:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(16,28,46,.05)}
+  .card h2{margin:0 0 10px;font-size:16px;color:var(--brand)}
+  .card h3{margin:14px 0 8px;font-size:14px;color:var(--brand)}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+  .kpi{background:var(--chip);border-radius:10px;padding:12px}
+  .kpi .n{font-size:16px;font-weight:800;color:var(--brand)}
+  .kpi .l{font-size:12px;color:var(--muted)}
+  label.f{display:block;font-size:12.5px;color:var(--muted);margin:8px 0 2px;font-weight:600}
+  .btn{background:var(--brand);color:#fff;border:0;padding:9px 15px;border-radius:9px;font-size:14px;font-weight:600;cursor:pointer}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.ghost{background:#fff;color:var(--brand);border:1px solid var(--brand)}
+  .btn.ok{background:var(--accent)} .btn.warn{background:var(--warn)} .btn.danger{background:var(--danger)}
+  .btn.sm{padding:6px 10px;font-size:13px}
+  .btnrow{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{padding:8px 9px;text-align:start;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{color:var(--muted);font-weight:700;font-size:12px;background:#f7fafc}
+  tbody tr{cursor:pointer} tbody tr:hover{background:#f7fafc}
+  .tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px}
+  .badge{display:inline-block;padding:3px 9px;border-radius:999px;font-size:12px;font-weight:700}
+  .st-NEW{background:#eef2f7;color:#425064}.st-AWAITING_QUOTE{background:#fff4e0;color:#8a5a00}
+  .st-QUOTE_RECEIVED{background:#e6f0ff;color:#1e4fa0}.st-APPROVED{background:#e4f5ec;color:#0e7a4e}
+  .st-TICKETED{background:#dff3e7;color:#0a5e3c}.st-CANCEL_REQUESTED{background:#fde8e6;color:#9a2b23}
+  .st-REJECTED{background:#f6e0de;color:#8a231c}.st-CANCELLED{background:#eceff3;color:#5b6b7f}
+  .timeline{list-style:none;margin:0;padding:0}
+  .timeline li{position:relative;padding:0 22px 14px;border-inline-start:2px solid var(--line);margin-inline-start:6px}
+  .timeline li:last-child{border-color:transparent}
+  .timeline .dot{position:absolute;inset-inline-start:-7px;top:2px;width:12px;height:12px;border-radius:50%;background:var(--brand2);border:2px solid #fff;box-shadow:0 0 0 2px var(--brand2)}
+  .timeline .tl-h{font-weight:700;font-size:13.5px}.timeline .tl-m{font-size:12px;color:var(--muted)}.timeline .tl-note{font-size:12.5px;margin-top:2px}
+  .filerow{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px}
+  .cobrand{display:flex;align-items:center;gap:10px;padding:8px 10px;background:var(--chip);border-radius:10px;margin-bottom:10px}
+  .cobrand img{height:26px}.cobrand .x{color:var(--muted)}
+  .notif{padding:10px;border-bottom:1px solid var(--line);font-size:13.5px;display:flex;gap:8px;align-items:flex-start;cursor:pointer}
+  .notif.unread{background:#f0f6ff}.notif .t{font-size:11px;color:var(--muted)}
+  .muted{color:var(--muted)}
+  .rowflex{display:flex;gap:14px;flex-wrap:wrap}.rowflex>div{flex:1;min-width:170px}
+  .pill{display:inline-block;background:var(--chip);color:var(--brand);border-radius:999px;padding:2px 9px;font-size:12px;font-weight:600}
+  .cols{display:flex;flex-wrap:wrap;gap:6px 16px;margin:6px 0}
+  .cols label{font-size:12.5px;display:flex;align-items:center;gap:5px;cursor:pointer}
+  footer{max-width:1080px;margin:0 auto;padding:8px 14px 26px;font-size:11.5px;color:var(--muted)}
+  #spin{position:fixed;inset:0;background:rgba(255,255,255,.5);display:flex;align-items:center;justify-content:center;z-index:50}
+  #spin div{width:34px;height:34px;border:4px solid var(--chip);border-top-color:var(--brand);border-radius:50%;animation:sp 1s linear infinite}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  .ac{position:relative}
+  .ac-list{position:absolute;left:0;right:0;top:100%;z-index:60;background:#fff;border:1px solid var(--line);border-radius:10px;max-height:250px;overflow:auto;box-shadow:0 8px 24px rgba(0,0,0,.14);margin-top:2px}
+  .ac-item{padding:9px 12px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--chip)}
+  .ac-item:last-child{border-bottom:0}
+  .ac-item:hover,.ac-item.on{background:var(--chip)}
+  .ac-item b{color:var(--brand)}
+  .ac-empty{padding:9px 12px;color:var(--muted);font-size:13px}
+</style>
+</head>
+<body>
+
+<div id="lock">
+  <div class="panel">
+    <img class="wm" src="/ords/arkia/api/assets/arkia" alt="Arkia" style="width:150px;max-width:60%;height:auto;display:block;margin:0 auto 8px" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'wm',textContent:'ARKIA'}))">
+    <h1 id="lk_title">הזמנת טיסות מטלטוס</h1>
+    <p>מערכת פנימית · ארקיע</p>
+    <button id="bioBtn" class="hidden" style="width:100%;margin-bottom:10px;background:var(--accent)">🔒 כניסה עם זיהוי פנים / אצבע</button>
+    <input id="lk_user" class="fld" placeholder="שם משתמש" autocomplete="username" dir="ltr">
+    <input id="lk_pw" class="fld" type="password" placeholder="סיסמה" autocomplete="current-password" dir="ltr">
+    <button id="unlockBtn">כניסה</button>
+    <div id="lockErr"></div>
+    <div style="margin-top:12px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:11px;color:var(--muted)">
+      <span>בשיתוף</span>
+      <img src="/ords/arkia/api/assets/teltos" alt="Teltos" style="height:20px;vertical-align:middle" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'טלטוס',style:'color:var(--brand)'}))">
+    </div>
+  </div>
+  <div id="lk_build" style="margin-top:12px;font-size:11px;color:rgba(255,255,255,.7)"></div>
+</div>
+
+<div id="appwrap" class="hidden">
+  <header class="app">
+    <div class="row">
+      <span class="logobadge"><img src="/ords/arkia/api/assets/arkia" alt="Arkia" onerror="this.parentNode.className='logotext';this.replaceWith('ARKIA')"></span>
+      <span class="logobadge"><img src="/ords/arkia/api/assets/teltos" alt="Teltos" onerror="this.parentNode.className='logotext';this.replaceWith('טלטוס')"></span>
+      <h1 id="app_title">הזמנת טיסות מטלטוס</h1>
+      <span class="spacer"></span>
+      <button class="hbtn" id="guideBtn" title="מדריך">❓</button>
+      <button class="hbtn" id="langBtn"></button>
+      <button class="hbtn bell" id="bellBtn">🔔<span class="count hidden" id="bellCount">0</span></button>
+      <span class="whoami" id="whoami"></span>
+      <button class="hbtn" id="logoutBtn"></button>
+    </div>
+    <nav class="tabs" id="tabs"></nav>
+  </header>
+  <main id="app"></main>
+  <footer id="foot"></footer>
+</div>
+<div id="spin" class="hidden"><div></div></div>
+<datalist id="airportsList"></datalist>
+
+<script>
+"use strict";
+/* ============================================================================
+   מערכת תיעוד הזמנות טיסות (ארקיע) — חזית מחוברת ל-REST (ORDS) על Oracle.
+   רב-משתמשי אמיתי. ה-API: /ords/arkia/api/  (ראו bookings/api/install_api.sql)
+   ========================================================================== */
+
+const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
+const BUILD = '2026-07-19.17';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+
+async function api(path, params){
+  // POST form-urlencoded = "simple request" → ללא CORS preflight.
+  // timeout כדי שבקשה תקועה (מובייל) לא תשאיר את המסך חסום; לעולם לא זורק.
+  try {
+    const ctl = new AbortController();
+    const to = setTimeout(()=>ctl.abort(), 20000);
+    const r = await fetch(API + path, { method:'POST', body:new URLSearchParams(params||{}), signal:ctl.signal });
+    clearTimeout(to);
+    const txt = await r.text();
+    try { return JSON.parse(txt); } catch(e){ return {ok:false, error:'bad_response: '+txt.slice(0,200)}; }
+  } catch(e){ return {ok:false, error:'network_error'}; }
+}
+function spin(on){ document.getElementById('spin').classList.toggle('hidden', !on); }
+spin(false);   // ודא שאין ספינר חוסם בטעינה
+try{ document.getElementById('lk_build').textContent='build '+BUILD; }catch(e){}
+
+/* ── מצב ── */
+let SES = null;     // {token,user,roles,agent_id}
+let BOOT = null;    // {departments,agents,currencies,statuses,wet_operators,airports}
+let VIEW = { tab:'bookings', lang:'he', bookingId:null, editing:false };
+let STMAP = {};     // status_code -> {he,en,terminal}
+let APMAP = {};     // iata -> {name_he,name_en}
+let UNREAD = 0;
+// deep-link מהמייל: /ords/arkia/api/app#b=123 → פתיחת ההזמנה לאחר התחברות
+let PENDING_BID = (function(){ const m=(location.hash||'').match(/b=(\d+)/); return m?Number(m[1]):null; })();
+
+const T = {
+  he:{title:"הזמנת טיסות מטלטוס",logout:"יציאה",bookings:"הזמנות",newB:"הזמנה חדשה",notifications:"התראות",
+    dept:"מחלקה",status:"סטטוס",initiator:"מזמין",agent:"סוכן",approver:"מאשר",openDate:"תאריך פתיחה",
+    departure:"תאריך יציאה",ticketingDate:"תאריך כרטוס",price:"מחיר",currency:"מטבע",pnr:"PNR",uref:"מזהה חד-ערכי",
+    none:"—",back:"חזרה",details:"פירוט הזמנה",timeline:"מעקב סטטוסים",files:"מסמכים",who:"מבצע",reason:"סיבה",
+    tripDetails:"פרטי נסיעה",quoteNotes:"הערות",sendToAgent:"שלח לסוכן",submitQuote:"הגש הצעת מחיר",
+    approve:"אשר",reject:"דחה",ticket:"כרטס",requestCancel:"בקש ביטול",confirmCancel:"אשר ביטול",
+    uploadScreenshot:"צילום ממערכת ההזמנות",uploadTicket:"מסמך/תמונת כרטוס",noBookings:"אין הזמנות להצגה",
+    markRead:"סמן הכל כנקרא",noNotif:"אין התראות",estPrice:"מחיר משוער",chooseAgent:"בחר סוכן",required:"שדה חובה",
+    download:"הורדה",view:"צפייה",cobrandNote:"בשיתוף",search:"חיפוש...",required2:"נא למלא שדות חובה",
+    finance:"כספים",total:"סה\"כ הזמנות",open:"פתוחות",ticketed:"כורטסו",cancelled:"בוטלו",exportExcel:"ייצוא Excel (CSV)",
+    admin:"ניהול",departments:"מחלקות",users:"משתמשים",agents:"סוכנים",currencies:"מטבעות",roles:"תפקידים",
+    name:"שם",code:"קוד",email:"אימייל",add:"הוסף",changePw:"שנה סיסמה",saved:"נשמר",role:"תפקיד",symbol:"סמל",
+    pax:"מס' נוסעים",prefTime:"שעה מועדפת",route:"נתיב",origin:"מוצא",dest:"יעד",wetOp:"מפעיל רטוב",
+    updatedBy:"עודכן ע\"י",edit:"עריכה",save:"שמור",editBooking:"עריכת הזמנה",optional:"(רשות)",
+    active:"פעיל",inactive:"לא פעיל",editUser:"עריכת משתמש",resetPw:"איפוס סיסמה",
+    tempPwTitle:"סיסמה זמנית נוצרה",tempPwMsg:"מסרו למשתמש את הסיסמה הזמנית. תוצג פעם אחת בלבד:",
+    pwSecNote:"סיסמאות נשמרות כ-hash חד-כיווני ולכן לא ניתן להציגן. איפוס יוצר סיסמה זמנית (וכשיופעל המייל — קישור איפוס).",
+    dashboard:"סיכום",filters:"סינון",fromDate:"מתאריך",toDate:"עד תאריך",applyFilters:"החל סינון",clearFilters:"נקה",
+    columns:"עמודות לייצוא",reportTemplate:"תבנית דוח",saveTemplate:"שמור תבנית",templateName:"שם התבנית",
+    loadTemplate:"טען תבנית",del:"מחק",wetOperators:"מפעילים רטובים",addWetOp:"הוסף מפעיל",all:"הכל",
+    lastUpdate:"עדכון אחרון",avgPax:"ממוצע נוסעים",byStatus:"לפי סטטוס",
+    airports:"שדות תעופה",country:"מדינה",addAirport:"הוסף/עדכן שדה תעופה",activate:"הפעל",deactivate:"השבת",
+    resetEmailed:"נשלח מייל עם סיסמה זמנית למשתמש:",sendToAgents:"שלח לכל הסוכנים",chooseDest:"בחר יעד",openPool:"פתוחה לכל הסוכנים",
+    typeToSearch:"הקלד קוד או שם יעד…",noMatch:"לא נמצאו יעדים תואמים",
+    welcomeSent:"נשלח מייל התחברות ראשוני אל",welcomeFailed:"המשתמש נוצר, אך שליחת מייל ההתחברות נכשלה — מסרו את הסיסמה ידנית או השתמשו ב'איפוס סיסמה'.",
+    emailLog:"לוג מיילים",emailLogNote:"מעקב קריאה מבוסס פיקסל — אינדיקציה בלבד. חלק מלקוחות המייל (Apple Mail, פרוקסי ארגוני) עלולים לסמן 'נקרא' מראש, ואחרים שחוסמים תמונות לא ירשמו קריאה כלל.",
+    recipient:"נמען",kind:"סוג",sentAt:"נשלח",readQ:"נקרא?",readAt:"מתי נקרא",read:"נקראו",yes:"כן",no:"לא",
+    emkAgentReq:"בקשה לסוכן",emkApprover:"אישור למאשר",emkWelcome:"מייל התחברות",emkReset:"איפוס סיסמה",emkStatus:"עדכון סטטוס",
+    accLocked:"החשבון ננעל זמנית עקב ריבוי ניסיונות כושלים. נסו שוב בעוד כ-15 דקות.",weakPw:"סיסמה קצרה מדי — נדרשים לפחות 8 תווים.",
+    loginAttempts:"ניסיונות התחברות",failed:"כשלונות",result:"תוצאה",lockNote:"נעילת חשבון אוטומטית לאחר 5 כשלונות ב-15 דקות. מנהל המערכת מקבל התראת מייל בעת נעילה.",
+    del:"מחק",delUser:"מחיקת משתמש",confirmDel:"למחוק את המשתמש?",loginLog:"לוג כניסות",time:"זמן",cancelBooking:"בטל הזמנה",
+    emailNotif:"התראות במייל",emailOn:"מקבל התראות במייל",emailOff:"התראות מייל כבויות",
+    R_INITIATOR:"יוזם",R_APPROVER:"מאשר",R_AGENT:"סוכן",R_FINANCE:"פיננס",R_ADMIN:"מנהל מערכת",
+    deptApprovers:"מאשרים לפי מחלקה",deptApproversHint:"אפשר להגדיר כמה מאשרים למחלקה — כולם יקבלו התראה וכל אחד יכול לאשר.",pickUser:"בחר מאשר",noApprover:"— לא הוגדר —",
+    lowCost:"LOW COST",lowCostQ:"טיסת LOW COST?",urgent:"דחוף",urgentQuote:"הצעת מחיר דחופה",
+    attachReq:"צרף קובץ (אקסל/PDF, רשות)",usage:"בקרת שימוש",storage:"אחסון",emailsMo:"מיילים החודש",send:"שלח",
+    emailsUnit:"מיילים",usageNote:"נתוני צריכה מול מכסות התוכנית החינמית של Oracle (250GB אחסון · 3,000 מיילים בחודש).",attachedFile:"קובץ מצורף",
+    bioLogin:"כניסה עם זיהוי פנים/אצבע",bioOn:"מופעל (לחצו לביטול)",bioOff:"הפעל"},
+  en:{title:"Flight Booking by Teltos",logout:"Logout",bookings:"Bookings",newB:"New Booking",notifications:"Notifications",
+    dept:"Department",status:"Status",initiator:"Initiator",agent:"Agent",approver:"Approver",openDate:"Open Date",
+    departure:"Departure",ticketingDate:"Ticketing Date",price:"Price",currency:"Currency",pnr:"PNR",uref:"Unique Ref",
+    none:"—",back:"Back",details:"Booking Details",timeline:"Status Timeline",files:"Documents",who:"By",reason:"Reason",
+    tripDetails:"Trip Details",quoteNotes:"Notes",sendToAgent:"Send to Agent",submitQuote:"Submit Quote",
+    approve:"Approve",reject:"Reject",ticket:"Ticket",requestCancel:"Request Cancel",confirmCancel:"Confirm Cancel",
+    uploadScreenshot:"Booking-system screenshot",uploadTicket:"Ticket document/image",noBookings:"No bookings to show",
+    markRead:"Mark all read",noNotif:"No notifications",estPrice:"Estimated price",chooseAgent:"Choose agent",required:"Required",
+    download:"Download",view:"View",cobrandNote:"With",search:"Search...",required2:"Please fill required fields",
+    finance:"Finance",total:"Total bookings",open:"Open",ticketed:"Ticketed",cancelled:"Cancelled",exportExcel:"Export Excel (CSV)",
+    admin:"Admin",departments:"Departments",users:"Users",agents:"Agents",currencies:"Currencies",roles:"Roles",
+    name:"Name",code:"Code",email:"Email",add:"Add",changePw:"Change password",saved:"Saved",role:"Role",symbol:"Symbol",
+    pax:"Passengers",prefTime:"Preferred time",route:"Route",origin:"From",dest:"To",wetOp:"Wet operator",
+    updatedBy:"Updated by",edit:"Edit",save:"Save",editBooking:"Edit booking",optional:"(optional)",
+    active:"Active",inactive:"Inactive",editUser:"Edit user",resetPw:"Reset password",
+    tempPwTitle:"Temporary password created",tempPwMsg:"Give the user this temporary password. Shown once only:",
+    pwSecNote:"Passwords are stored as a one-way hash and cannot be displayed. Reset creates a temporary password (and once email is enabled — a reset link).",
+    dashboard:"Overview",filters:"Filters",fromDate:"From date",toDate:"To date",applyFilters:"Apply",clearFilters:"Clear",
+    columns:"Export columns",reportTemplate:"Report template",saveTemplate:"Save template",templateName:"Template name",
+    loadTemplate:"Load template",del:"Delete",wetOperators:"Wet operators",addWetOp:"Add operator",all:"All",
+    lastUpdate:"Last update",avgPax:"Avg passengers",byStatus:"By status",
+    airports:"Airports",country:"Country",addAirport:"Add/update airport",activate:"Activate",deactivate:"Deactivate",
+    resetEmailed:"A temporary password was emailed to the user:",sendToAgents:"Send to all agents",chooseDest:"Choose destination",openPool:"Open to all agents",
+    typeToSearch:"Type a code or destination…",noMatch:"No matching destinations",
+    welcomeSent:"A welcome/login email was sent to",welcomeFailed:"User created, but the login email failed — share the password manually or use 'Reset password'.",
+    emailLog:"Email log",emailLogNote:"Read tracking is pixel-based — indicative only. Some clients (Apple Mail, corporate proxies) may pre-mark 'read', and image-blocking clients never register a read.",
+    recipient:"Recipient",kind:"Type",sentAt:"Sent",readQ:"Read?",readAt:"Read at",read:"read",yes:"Yes",no:"No",
+    emkAgentReq:"Agent request",emkApprover:"Approver approval",emkWelcome:"Welcome email",emkReset:"Password reset",emkStatus:"Status update",
+    accLocked:"Account temporarily locked after too many failed attempts. Try again in ~15 minutes.",weakPw:"Password too short — at least 8 characters required.",
+    loginAttempts:"Login attempts",failed:"failed",result:"Result",lockNote:"Automatic lockout after 5 failures in 15 minutes. Admins are emailed on lockout.",
+    delUser:"Delete user",confirmDel:"Delete this user?",loginLog:"Login log",time:"Time",cancelBooking:"Cancel booking",
+    emailNotif:"Email notifications",emailOn:"Email notifications on",emailOff:"Email notifications off",
+    R_INITIATOR:"Initiator",R_APPROVER:"Approver",R_AGENT:"Agent",R_FINANCE:"Finance",R_ADMIN:"Admin",
+    deptApprovers:"Approvers per department",deptApproversHint:"A department can have several approvers — all are notified and any of them can approve.",pickUser:"Choose approver",noApprover:"— not set —",
+    lowCost:"LOW COST",lowCostQ:"Low-cost flight?",urgent:"URGENT",urgentQuote:"Urgent quote",
+    attachReq:"Attach file (Excel/PDF, optional)",usage:"Usage",storage:"Storage",emailsMo:"Emails this month",send:"Send",
+    emailsUnit:"emails",usageNote:"Consumption vs. Oracle free-tier quotas (250GB storage · 3,000 emails/month).",attachedFile:"Attached file",
+    bioLogin:"Face / fingerprint login",bioOn:"Enabled (tap to disable)",bioOff:"Enable"}
+};
+function t(k){ return (T[VIEW.lang]||T.he)[k]||k; }
+function stLabel(code){ const s=STMAP[code]; return s?(VIEW.lang==='en'?s.en:s.he):code; }
+function stTerminal(code){ const s=STMAP[code]; return s? s.terminal==='Y':false; }
+function hasRole(r){ return SES && SES.roles && SES.roles.indexOf(r)>=0; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function curSym(code){ const c=(BOOT.currencies||[]).find(x=>x.code===code); return c?c.symbol:''; }
+function deptName(d){ return VIEW.lang==='en'?(d.name_en||d.name_he):d.name_he; }
+function apLabel(iata){ if(!iata) return ''; const a=APMAP[iata]; return a?(iata+' · '+(VIEW.lang==='en'?a.name_en:a.name_he)):iata; }
+function airportOptions(sel){ return (BOOT.airports||[]).map(a=>`<option value="${a.iata}" ${a.iata===sel?'selected':''}>${esc(a.iata+' · '+(VIEW.lang==='en'?a.name_en:a.name_he))}</option>`).join(''); }
+
+/* ── תיבת חיפוש יעדים (combobox): מקלידים ומופיעות ההתאמות ── */
+function acInput(id, selIata, placeholder){
+  const cur = selIata ? apLabel(selIata) : '';
+  return `<div class="ac">
+    <input id="${id}" class="fld" autocomplete="off" inputmode="search" placeholder="${esc(placeholder||t('typeToSearch'))}"
+      value="${esc(cur)}" data-iata="${esc(selIata||'')}"
+      oninput="acFilter('${id}')" onfocus="acFilter('${id}')" onblur="acBlur('${id}')" onkeydown="acKey(event,'${id}')">
+    <div id="${id}_list" class="ac-list hidden"></div>
+  </div>`;
+}
+function acFilter(id){
+  const inp=document.getElementById(id); if(!inp) return;
+  const q=inp.value.trim().toLowerCase();
+  // אם מה שמוקלד תואם בדיוק קוד IATA קיים — נשמור אותו כבחירה
+  const exact=(BOOT.airports||[]).find(a=>a.iata.toLowerCase()===q);
+  if(exact) inp.dataset.iata=exact.iata; else if(!q) inp.dataset.iata='';
+  const list=document.getElementById(id+'_list');
+  let arr=(BOOT.airports||[]);
+  if(q){ arr=arr.filter(a=>a.iata.toLowerCase().includes(q)||(a.name_he||'').toLowerCase().includes(q)||(a.name_en||'').toLowerCase().includes(q)); }
+  arr=arr.slice(0,40);
+  if(!arr.length){ list.innerHTML=`<div class="ac-empty">${t('noMatch')}</div>`; list.classList.remove('hidden'); return; }
+  list.innerHTML=arr.map(a=>`<div class="ac-item" data-iata="${a.iata}" onmousedown="acPick(event,'${id}','${a.iata}')">
+    <b>${esc(a.iata)}</b> · ${esc(VIEW.lang==='en'?a.name_en:a.name_he)}${a.country?` <span style="color:var(--muted);font-size:12px">— ${esc(a.country)}</span>`:''}</div>`).join('');
+  list.classList.remove('hidden');
+}
+function acPick(ev,id,iata){
+  ev.preventDefault();   // לפני blur
+  const inp=document.getElementById(id);
+  inp.value=apLabel(iata); inp.dataset.iata=iata;
+  document.getElementById(id+'_list').classList.add('hidden');
+}
+function acBlur(id){ setTimeout(()=>{ const l=document.getElementById(id+'_list'); if(l) l.classList.add('hidden'); }, 150); }
+function acKey(ev,id){ if(ev.key==='Escape'){ document.getElementById(id+'_list').classList.add('hidden'); } }
+function acGet(id){ const inp=document.getElementById(id); if(!inp) return ''; if(inp.dataset.iata) return inp.dataset.iata;
+  const q=(inp.value||'').trim().toLowerCase(); const m=(BOOT.airports||[]).find(a=>a.iata.toLowerCase()===q); return m?m.iata:''; }
+function routeLabel(b){ if(!b.origin&&!b.dest) return t('none'); return (b.origin||'?')+' → '+(b.dest||'?'); }
+function isACMI(deptId){ const d=(BOOT.departments||[]).find(x=>x.id===deptId); return d&&d.code==='ACMI'; }
+
+/* ── התחברות + סשן נשמר (localStorage) ── */
+const SKEY='arkia_session';
+function saveSession(){ try{ localStorage.setItem(SKEY, JSON.stringify(SES)); }catch(e){} }
+function clearSession(){ try{ localStorage.removeItem(SKEY); }catch(e){} }
+// מציג את האפליקציה לאחר שהתקבל bootstrap תקין.
+function applyBoot(boot){
+  BOOT=boot; STMAP={}; (boot.statuses||[]).forEach(s=>STMAP[s.code]={he:s.he,en:s.en,terminal:s.terminal});
+  APMAP={}; (boot.airports||[]).forEach(a=>APMAP[a.iata]={name_he:a.name_he,name_en:a.name_en});
+  buildAirportList();
+  VIEW.tab='bookings';
+  if(PENDING_BID){ VIEW.bookingId=PENDING_BID; PENDING_BID=null; try{history.replaceState(null,'',location.pathname);}catch(e){} }
+  document.getElementById('lock').classList.add('hidden');
+  document.getElementById('appwrap').classList.remove('hidden');
+  applyLang();
+}
+// טוען bootstrap עם הטוקן הנוכחי ומציג את האפליקציה. מחזיר false אם הטוקן פג/נכשל.
+async function enterApp(){
+  const boot=await api('bootstrap',{token:SES.token});
+  if(!boot.ok) return false;
+  applyBoot(boot); await refreshUnread(); render();
+  return true;
+}
+async function doLogin(){
+  const u=document.getElementById('lk_user').value.trim();
+  const p=document.getElementById('lk_pw').value;
+  if(!u||!p){ document.getElementById('lockErr').textContent=t('required2'); return; }
+  spin(true);
+  const res=await api('login',{username:u,password:p});
+  if(!res.ok){ spin(false);
+    const msg = res.error==='bad_credentials' ? 'שם משתמש או סיסמה שגויים / Invalid credentials'
+              : res.error==='locked' ? t('accLocked')
+              : ('שגיאה: '+res.error);
+    document.getElementById('lockErr').textContent = msg; return; }
+  SES={token:res.token,user:res.user,roles:res.roles||[],agent_id:res.agent_id};
+  VIEW.lang=(res.user.pref_lang||'HE').toLowerCase();
+  saveSession();
+  const ok=await enterApp();
+  spin(false);
+  if(!ok){ document.getElementById('lockErr').textContent='שגיאת טעינה / load error'; }
+}
+function logout(){ clearSession(); SES=null; document.getElementById('appwrap').classList.add('hidden');
+  document.getElementById('lock').classList.remove('hidden');
+  document.getElementById('lk_user').value=''; document.getElementById('lk_pw').value=''; document.getElementById('lockErr').textContent=''; }
+// מנסה לשחזר את הסשן מול השרת, עם ניסיונות חוזרים. קריטי: מוחקים את הטוקן
+// רק אם השרת אומר במפורש שהוא פג — לא על תקלת רשת (הפעלה קרה של ה-PWA).
+async function restoreSession(){
+  for(let attempt=0; attempt<4; attempt++){
+    let boot; try{ boot=await api('bootstrap',{token:SES.token}); }catch(e){ boot={ok:false,error:'network_error'}; }
+    if(boot.ok){ applyBoot(boot); await refreshUnread(); render(); return true; }
+    // טוקן פג/לא תקף באמת → התנתקות אמיתית
+    if(/invalid_or_expired_token|20401/.test(boot.error||'')){ clearSession(); SES=null; return false; }
+    // תקלת רשת רגעית → לא מוחקים את הטוקן; ממתינים ומנסים שוב
+    await new Promise(r=>setTimeout(r, 900*(attempt+1)));
+  }
+  return false; // אין רשת כרגע — הסשן נשמר, המשתמש יכול לנסות שוב
+}
+
+// שחזור סשן בטעינת העמוד (מובייל: להישאר מחובר, עם אפשרות זיהוי ביומטרי)
+async function tryRestore(){
+  let s=null; try{ s=JSON.parse(localStorage.getItem(SKEY)||'null'); }catch(e){}
+  if(!(s && s.token && s.user)) return;
+  SES=s; VIEW.lang=(s.user.pref_lang||'HE').toLowerCase();
+  if(bioEnabled() && bioSupported()){
+    // מציגים כפתור פתיחה ביומטרי ומפעילים אותו אוטומטית פעם אחת
+    const b=document.getElementById('bioBtn'); b.classList.remove('hidden'); b.onclick=bioUnlockAndEnter;
+    bioUnlockAndEnter();
+    return;
+  }
+  await restoreSession();
+}
+
+// אם אין רשת בהפעלה קרה — לנסות שוב כשחוזרים לחזית/כשיש רשת
+window.addEventListener('online', ()=>{ if(SES && !document.getElementById('appwrap').classList.contains('hidden')) return; if(SES) restoreSession(); });
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible' && SES && document.getElementById('appwrap').classList.contains('hidden') && !bioEnabled()) restoreSession(); });
+
+/* ── זיהוי ביומטרי (WebAuthn platform authenticator) — נעילת פתיחה מקומית ── */
+const BKEY='arkia_bio';
+function bioSupported(){ return !!(window.PublicKeyCredential && navigator.credentials && location.protocol==='https:'); }
+function bioCfg(){ try{ return JSON.parse(localStorage.getItem(BKEY)||'null'); }catch(e){ return null; } }
+function bioEnabled(){ const c=bioCfg(); return !!(c && c.credId); }
+function _b64uToBuf(s){ s=String(s).replace(/-/g,'+').replace(/_/g,'/'); const pad=s.length%4?'='.repeat(4-s.length%4):''; const bin=atob(s+pad); const u=new Uint8Array(bin.length); for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i); return u.buffer; }
+function _bufToB64u(b){ const u=new Uint8Array(b); let s=''; for(let i=0;i<u.length;i++)s+=String.fromCharCode(u[i]); return btoa(s).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+// הפעלה (מתוך מסך ההתראות/הגדרות, לאחר התחברות)
+async function bioRegister(){
+  if(!bioSupported()){ alert('הדפדפן/מכשיר אינו תומך בזיהוי ביומטרי'); return; }
+  try{
+    const uid=String((SES.user&&(SES.user.username||SES.user.full_name))||'user');
+    const cred=await navigator.credentials.create({ publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)),
+      rp:{ name:'Teltos Bookings' },
+      user:{ id:new TextEncoder().encode(uid).slice(0,64), name:uid, displayName:uid },
+      pubKeyCredParams:[{type:'public-key',alg:-7},{type:'public-key',alg:-257}],
+      authenticatorSelection:{ authenticatorAttachment:'platform', userVerification:'required', residentKey:'preferred' },
+      timeout:60000, attestation:'none'
+    }});
+    localStorage.setItem(BKEY, JSON.stringify({ credId:_bufToB64u(cred.rawId) }));
+    alert('זיהוי ביומטרי הופעל ✓ בכניסה הבאה תתבקשו לאמת בפנים/אצבע.');
+  }catch(e){ alert('ההפעלה בוטלה או נכשלה'); }
+  render();
+}
+function bioDisable(){ localStorage.removeItem(BKEY); render(); }
+// אימות פתיחה — מחזיר true אם עבר
+async function bioVerify(){
+  const c=bioCfg(); if(!(c && c.credId)) return false;
+  try{
+    await navigator.credentials.get({ publicKey:{
+      challenge:crypto.getRandomValues(new Uint8Array(32)),
+      allowCredentials:[{ type:'public-key', id:_b64uToBuf(c.credId) }],
+      userVerification:'required', timeout:60000
+    }});
+    return true;
+  }catch(e){ return false; }
+}
+async function bioUnlockAndEnter(){
+  const ok=await bioVerify();
+  if(!ok){ document.getElementById('lockErr').textContent='האימות הביומטרי בוטל — אפשר להיכנס עם סיסמה'; return; }
+  document.getElementById('lockErr').textContent='';
+  await restoreSession();
+}
+
+function buildAirportList(){
+  const dl=document.getElementById('airportsList');
+  dl.innerHTML=(BOOT.airports||[]).map(a=>`<option value="${a.iata}">${esc(a.iata+' · '+(VIEW.lang==='en'?a.name_en:a.name_he))}</option>`).join('');
+}
+
+/* ── שפה ── */
+function applyLang(){
+  document.documentElement.lang=VIEW.lang==='en'?'en':'he';
+  document.documentElement.dir=VIEW.lang==='en'?'ltr':'rtl';
+  document.getElementById('app_title').textContent=t('title');
+  document.getElementById('langBtn').textContent=VIEW.lang==='en'?'🇮🇱 עברית':'🇺🇸 English';
+  document.getElementById('logoutBtn').textContent=t('logout');
+}
+function toggleLang(){ VIEW.lang=VIEW.lang==='en'?'he':'en'; buildAirportList(); applyLang(); render(); }
+
+/* ── ניווט ── */
+function canInitiate(){ return hasRole('INITIATOR')||hasRole('APPROVER'); }
+function tabsFor(){
+  const tabs=[['bookings',t('bookings')]];
+  if(canInitiate()) tabs.push(['new',t('newB')]);
+  if(hasRole('AGENT')) tabs.push(['urgent',t('urgentQuote')]);
+  if(hasRole('FINANCE')||hasRole('ADMIN')) tabs.push(['finance',t('finance')]);
+  if(hasRole('ADMIN')) tabs.push(['admin',t('admin')]);
+  if(hasRole('ADMIN')) tabs.push(['log',t('loginLog')]);
+  if(hasRole('ADMIN')) tabs.push(['emaillog',t('emailLog')]);
+  return tabs;
+}
+async function refreshUnread(){
+  const r=await api('notifications',{token:SES.token});
+  if(r.ok){ UNREAD=(r.notifications||[]).filter(n=>n.is_read==='N').length; }
+  const bc=document.getElementById('bellCount'); bc.textContent=UNREAD; bc.classList.toggle('hidden',UNREAD===0);
+}
+function roleLabel(r){ return t('R_'+r)||r; }
+function render(){
+  const roleTxt=(SES.roles||[]).map(roleLabel).join(' · ');
+  document.getElementById('whoami').textContent=SES.user.full_name+(roleTxt?(' · '+roleTxt):'');
+  const bc=document.getElementById('bellCount'); bc.textContent=UNREAD; bc.classList.toggle('hidden',UNREAD===0);
+  const nav=document.getElementById('tabs'); nav.innerHTML='';
+  tabsFor().forEach(([k,lbl])=>{ const b=document.createElement('button'); b.textContent=lbl;
+    b.className=VIEW.tab===k?'sel':''; b.onclick=()=>{VIEW.tab=k;VIEW.bookingId=null;VIEW.editing=false;render();}; nav.appendChild(b); });
+  document.getElementById('foot').textContent=(VIEW.lang==='en'?'Internal use · Arkia · live on Oracle · CI/CD ✓':'לשימוש פנימי · ארקיע · מחובר לאורקל · פריסה אוטומטית ✓')+' · build '+BUILD;
+  const app=document.getElementById('app');
+  if(VIEW.tab==='notifications') return renderNotifications(app);
+  if(VIEW.bookingId) return renderDetail(app,VIEW.bookingId);
+  if(VIEW.tab==='new') return renderNew(app);
+  if(VIEW.tab==='urgent') return renderUrgent(app);
+  if(VIEW.tab==='finance') return renderFinance(app);
+  if(VIEW.tab==='admin') return renderAdmin(app);
+  if(VIEW.tab==='log') return renderLog(app);
+  if(VIEW.tab==='emaillog') return renderEmailLog(app);
+  return renderBookings(app);
+}
+
+/* ── רשימת הזמנות (עם דשבורד) ── */
+async function renderBookings(app){
+  app.innerHTML=`<div class="card"><h2>${t('bookings')}</h2><div class="muted">…</div></div>`;
+  const r=await api('bookings',{token:SES.token});
+  if(!r.ok) return app.innerHTML=`<div class="card"><h2>${t('bookings')}</h2><div class="muted" style="color:var(--danger)">${esc(r.error)}</div></div>`;
+  const list=r.bookings||[];
+  const openN=list.filter(b=>!stTerminal(b.status)).length;
+  const tkN=list.filter(b=>b.status==='TICKETED').length;
+  const awQ=list.filter(b=>b.status==='AWAITING_QUOTE'||b.status==='QUOTE_RECEIVED').length;
+  const cnN=list.filter(b=>b.status==='CANCELLED'||b.status==='CANCEL_REQUESTED').length;
+  app.innerHTML=`<div class="card"><h2>${t('dashboard')}</h2>
+    <div class="grid">
+      <div class="kpi"><div class="l">${t('total')}</div><div class="n">${list.length}</div></div>
+      <div class="kpi"><div class="l">${t('open')}</div><div class="n">${openN}</div></div>
+      <div class="kpi"><div class="l">${t('status')}: ${t('submitQuote')}</div><div class="n">${awQ}</div></div>
+      <div class="kpi"><div class="l">${t('ticketed')}</div><div class="n">${tkN}</div></div>
+      <div class="kpi"><div class="l">${t('cancelled')}</div><div class="n">${cnN}</div></div>
+    </div></div>
+  <div class="card"><h2>${t('bookings')}</h2>
+    <input id="bkSearch" class="fld" placeholder="${t('search')}" oninput="filterBk()">
+    <div class="tablewrap" style="margin-top:10px"><table id="bkTable"><thead><tr>
+      <th>#</th><th>${t('status')}</th><th>${t('dept')}</th><th>${t('route')}</th><th>${t('pax')}</th>
+      <th>${t('initiator')}</th><th>${t('agent')}</th><th>${t('departure')}</th><th>${t('price')}</th>
+      <th>${t('pnr')}</th><th>${t('updatedBy')}</th></tr></thead><tbody>${
+      list.map(b=>`<tr onclick="openBk(${b.id})">
+        <td>${b.seq}${b.urgent==='Y'?` <span class="badge" style="background:var(--danger);color:#fff">${t('urgent')}</span>`:''}${b.low_cost==='Y'?` <span class="badge" style="background:var(--warn);color:#fff">LC</span>`:''}</td><td><span class="badge st-${b.status}">${stLabel(b.status)}</span></td>
+        <td>${esc(VIEW.lang==='en'?b.dept_en:b.dept_he)}</td><td>${esc(routeLabel(b))}</td><td>${b.pax||1}</td>
+        <td>${esc(b.initiator)}</td><td>${esc(b.agent||t('none'))}</td><td>${b.departure_date||t('none')}</td>
+        <td>${b.price!=null?curSym(b.currency)+Number(b.price).toLocaleString():t('none')}</td>
+        <td>${esc(b.pnr||t('none'))}</td>
+        <td>${esc(b.updated_by||t('none'))}<br><span class="muted" style="font-size:11px">${b.updated_at||''}</span></td></tr>`).join('')||`<tr><td colspan="11" class="muted">${t('noBookings')}</td></tr>`}
+    </tbody></table></div></div>`;
+}
+function filterBk(){ const q=document.getElementById('bkSearch').value.toLowerCase();
+  document.querySelectorAll('#bkTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
+function openBk(id){ VIEW.bookingId=id; VIEW.editing=false; render(); }
+
+/* ── ניהול (ADMIN) ── */
+const ROLES=['INITIATOR','APPROVER','AGENT','FINANCE','ADMIN'];
+let ADMIN_USERS=[];
+async function renderAdmin(app){
+  app.innerHTML=`<div class="card"><h2>${t('admin')}</h2><div class="muted">…</div></div>`;
+  const ur=await api('admin/users',{token:SES.token});
+  ADMIN_USERS=ur.ok?(ur.users||[]):[];
+  const users=ADMIN_USERS;
+  const apr=await api('admin/airports',{token:SES.token});
+  const airports=apr.ok?(apr.airports||[]):[];
+  const dar=await api('admin/dept_approvers',{token:SES.token});
+  const daMap={}; (dar.ok?(dar.approvers||[]):[]).forEach(a=>{ (daMap[a.dept_id]=daMap[a.dept_id]||[]).push({user_id:a.user_id,name:a.name}); });
+  const usg=await api('admin/usage',{token:SES.token});
+  const usage=usg.ok?usg:null;
+  const deptOpts=BOOT.departments.map(d=>`<option value="${d.id}">${esc(deptName(d))}</option>`).join('');
+  const roleOpts=ROLES.map(r=>`<option value="${r}">${r}</option>`).join('');
+  app.innerHTML=`
+  ${usage?`<div class="card"><h2>${t('usage')}</h2>
+    ${meterHtml(t('storage'),usage.storage_gb,usage.storage_limit_gb,'GB')}
+    ${meterHtml(t('emailsMo'),usage.emails_month,usage.emails_limit,t('emailsUnit'))}
+    <p class="muted" style="font-size:12px;margin-top:6px">${t('usageNote')}</p>
+  </div>`:''}
+  <div class="card"><h2>${t('departments')}</h2>
+    <div class="tablewrap"><table><thead><tr><th>${t('name')} (HE)</th><th>Name (EN)</th><th>${t('code')}</th><th></th></tr></thead><tbody>${
+      BOOT.departments.map(d=>`<tr>
+        <td><input id="edh_${d.id}" class="fld" style="margin:0" value="${esc(d.name_he||'')}"></td>
+        <td><input id="ede_${d.id}" class="fld" style="margin:0" dir="ltr" value="${esc(d.name_en||'')}"></td>
+        <td><input id="edc_${d.id}" class="fld" style="margin:0;max-width:110px" dir="ltr" value="${esc(d.code||'')}"></td>
+        <td style="white-space:nowrap"><button class="btn sm" onclick="saveDept(${d.id})">${t('save')}</button></td>
+      </tr>`).join('')}</tbody></table></div>
+    <div id="deptEditErr" style="color:var(--danger);font-size:13px"></div>
+    <div class="rowflex" style="margin-top:8px">
+      <div><input id="ad_code" class="fld" placeholder="${t('code')}"></div>
+      <div><input id="ad_he" class="fld" placeholder="שם (עברית)"></div>
+      <div><input id="ad_en" class="fld" placeholder="Name (English)"></div>
+      <div style="flex:0"><button class="btn sm" onclick="addDept()">${t('add')}</button></div>
+    </div><div id="ad_err" style="color:var(--danger);font-size:13px"></div>
+  </div>
+  <div class="card"><h2>${t('deptApprovers')}</h2>
+    <p class="muted" style="font-size:12px;margin:0 0 8px">${t('deptApproversHint')}</p>
+    <div class="tablewrap"><table><thead><tr><th>${t('dept')}</th><th>${t('R_APPROVER')}</th><th>${t('add')}</th></tr></thead>
+    <tbody>${BOOT.departments.map(d=>{
+      const cur=daMap[d.id]||[];
+      const curIds=cur.map(a=>a.user_id);
+      const opts=users.filter(u=>!(u.roles||'').split(',').includes('AGENT') && !curIds.includes(u.id))
+        .map(u=>`<option value="${u.id}">${esc(u.full_name)}</option>`).join('');
+      const chips=cur.length?cur.map(a=>`<span class="pill" style="margin:2px">${esc(a.name)}
+          <a onclick="delDeptApprover(${d.id},${a.user_id})" style="cursor:pointer;color:var(--danger);font-weight:800;margin-inline-start:4px">✕</a></span>`).join(' ')
+        :`<span class="muted">${t('noApprover')}</span>`;
+      return `<tr><td>${esc(deptName(d))}</td>
+        <td>${chips}</td>
+        <td><div class="rowflex" style="margin:0"><div><select id="da_${d.id}" class="fld" style="margin:0"><option value="">${t('pickUser')}</option>${opts}</select></div>
+          <div style="flex:0"><button class="btn sm" onclick="setDeptApprover(${d.id})">${t('add')}</button></div></div></td></tr>`;
+    }).join('')}</tbody></table></div>
+    <div id="da_err" style="color:var(--danger);font-size:13px"></div>
+  </div>
+  <div class="card"><h2>${t('users')}</h2>
+    <div class="tablewrap"><table><thead><tr><th>username</th><th>${t('name')}</th><th>${t('email')}</th><th>${t('dept')}</th><th>${t('roles')}</th><th></th></tr></thead>
+    <tbody>${users.map((u,i)=>`<tr><td>${esc(u.username)}</td><td>${esc(u.full_name)}</td><td dir="ltr">${esc(u.email||t('none'))}</td><td>${esc(u.dept||t('none'))}</td>
+      <td>${(u.roles||'').split(',').filter(x=>x).map(r=>`<span class="pill">${r}</span>`).join(' ')}</td>
+      <td><div class="btnrow" style="margin:0">
+        <button class="btn ghost sm" onclick="editUser(${i})">${t('edit')}</button>
+        <button class="btn ghost sm" onclick="resetPw(${u.id},'${esc(u.username)}')">${t('resetPw')}</button>
+        <button class="btn danger sm" onclick="delUser(${u.id},'${esc(u.username)}')">${t('del')}</button>
+      </div></td></tr>`).join('')}</tbody></table></div>
+    <div id="edit_user_box"></div>
+    <p class="muted" style="font-size:12px;margin-top:8px">${t('pwSecNote')}</p>
+    <h3>${t('add')} · ${t('users')}</h3>
+    <div class="rowflex">
+      <div><input id="au_un" class="fld" placeholder="username" dir="ltr"></div>
+      <div><input id="au_fn" class="fld" placeholder="${t('name')}"></div>
+      <div><input id="au_em" class="fld" placeholder="${t('email')}" dir="ltr"></div>
+    </div>
+    <div class="rowflex">
+      <div><select id="au_dept" class="fld"><option value="">${t('none')}</option>${deptOpts}</select></div>
+      <div><select id="au_role" class="fld">${roleOpts}</select></div>
+      <div><input id="au_pw" class="fld" placeholder="${t('changePw')} (Arkia2026!)" dir="ltr"></div>
+      <div style="flex:0"><button class="btn sm" onclick="addUser()">${t('add')}</button></div>
+    </div><div id="au_err" style="color:var(--danger);font-size:13px"></div>
+  </div>
+  <div class="card"><h2>${t('wetOperators')} <span class="muted" style="font-size:12px">(ACMI)</span></h2>
+    <div class="tablewrap"><table><thead><tr><th>${t('name')} (HE)</th><th>Name (EN)</th></tr></thead>
+    <tbody>${(BOOT.wet_operators||[]).map(w=>`<tr><td>${esc(w.name_he)}</td><td dir="ltr">${esc(w.name_en)}</td></tr>`).join('')||`<tr><td colspan="2" class="muted">${t('none')}</td></tr>`}</tbody></table></div>
+    <div class="rowflex" style="margin-top:8px">
+      <div><input id="wo_he" class="fld" placeholder="שם (עברית)"></div>
+      <div><input id="wo_en" class="fld" placeholder="Name (English)" dir="ltr"></div>
+      <div style="flex:0"><button class="btn sm" onclick="addWetOp()">${t('addWetOp')}</button></div>
+    </div><div id="wo_err" style="color:var(--danger);font-size:13px"></div>
+  </div>
+  <div class="card"><h2>${t('airports')} <span class="muted" style="font-size:12px">(${airports.length})</span></h2>
+    <input id="ap_search" class="fld" placeholder="${t('search')}" oninput="filterAp()">
+    <div class="tablewrap" style="margin-top:8px"><table id="apTable"><thead><tr>
+      <th>IATA</th><th>${t('name')} (HE)</th><th>Name (EN)</th><th>${t('country')}</th><th>${t('status')}</th><th></th></tr></thead>
+    <tbody>${airports.map(a=>`<tr>
+      <td dir="ltr"><b>${esc(a.iata)}</b></td><td>${esc(a.name_he||'')}</td><td dir="ltr">${esc(a.name_en||'')}</td>
+      <td>${esc(a.country||'')}</td><td>${a.is_active==='Y'?`<span class="pill">${t('active')}</span>`:`<span class="muted">${t('inactive')}</span>`}</td>
+      <td><div class="btnrow" style="margin:0">
+        <button class="btn ghost sm" onclick="editAirport('${esc(a.iata)}','${esc(a.name_he||'')}','${esc(a.name_en||'')}','${esc(a.country||'')}')">${t('edit')}</button>
+        <button class="btn ghost sm" onclick="toggleAirport('${esc(a.iata)}','${a.is_active==='Y'?'N':'Y'}')">${a.is_active==='Y'?t('deactivate'):t('activate')}</button>
+      </div></td></tr>`).join('')||`<tr><td colspan="6" class="muted">${t('none')}</td></tr>`}</tbody></table></div>
+    <h3>${t('addAirport')}</h3>
+    <div class="rowflex">
+      <div style="flex:0 0 90px"><input id="ap_iata" class="fld" placeholder="IATA" dir="ltr" maxlength="4"></div>
+      <div><input id="ap_he" class="fld" placeholder="שם (עברית)"></div>
+      <div><input id="ap_en" class="fld" placeholder="Name (English)" dir="ltr"></div>
+      <div><input id="ap_country" class="fld" placeholder="${t('country')}"></div>
+      <div style="flex:0"><button class="btn sm" onclick="saveAirport()">${t('save')}</button></div>
+    </div><div id="ap_err" style="color:var(--danger);font-size:13px"></div>
+  </div>
+  <div class="card"><h2>${t('currencies')}</h2>
+    <div class="tablewrap"><table><thead><tr><th>${t('code')}</th><th>${t('symbol')}</th></tr></thead>
+    <tbody>${BOOT.currencies.map(c=>`<tr><td>${c.code}</td><td>${c.symbol}</td></tr>`).join('')}</tbody></table></div>
+  </div>`;
+}
+function meterHtml(label,val,lim,unit){
+  val=Number(val)||0; lim=Number(lim)||1;
+  const pct=Math.min(100,Math.round(val/lim*1000)/10);
+  const col=pct>=90?'var(--danger)':(pct>=70?'var(--warn)':'var(--accent)');
+  return `<div style="margin:10px 0">
+    <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+      <b>${label}</b><span dir="ltr" class="muted">${val} / ${lim} ${unit} · ${pct}%</span></div>
+    <div style="background:#e6ebf2;border-radius:999px;height:12px;overflow:hidden">
+      <div style="width:${pct}%;height:100%;background:${col};border-radius:999px;transition:width .4s"></div></div>
+  </div>`;
+}
+function filterAp(){ const q=document.getElementById('ap_search').value.toLowerCase();
+  document.querySelectorAll('#apTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
+function editAirport(iata,he,en,country){
+  document.getElementById('ap_iata').value=iata; document.getElementById('ap_he').value=he;
+  document.getElementById('ap_en').value=en; document.getElementById('ap_country').value=country;
+  document.getElementById('ap_iata').scrollIntoView({behavior:'smooth',block:'center'});
+}
+async function saveAirport(){
+  const iata=document.getElementById('ap_iata').value.trim().toUpperCase();
+  if(!iata){ document.getElementById('ap_err').textContent=t('required2'); return; }
+  spin(true);
+  const r=await api('admin/airport/save',{token:SES.token,iata:iata,
+    name_he:document.getElementById('ap_he').value.trim(),name_en:document.getElementById('ap_en').value.trim(),
+    country:document.getElementById('ap_country').value.trim(),is_active:'Y'});
+  await refreshBoot(); spin(false);
+  if(!r.ok){ document.getElementById('ap_err').textContent=r.error; return; } render();
+}
+async function toggleAirport(iata,to){
+  spin(true); const r=await api('admin/airport/save',{token:SES.token,iata:iata,is_active:to}); await refreshBoot(); spin(false);
+  if(!r.ok){ alert(r.error); return; } render();
+}
+async function refreshBoot(){ const b=await api('bootstrap',{token:SES.token}); if(b.ok){ BOOT=b; STMAP={}; (b.statuses||[]).forEach(s=>STMAP[s.code]={he:s.he,en:s.en,terminal:s.terminal});
+  APMAP={}; (b.airports||[]).forEach(a=>APMAP[a.iata]={name_he:a.name_he,name_en:a.name_en}); buildAirportList(); } }
+async function addDept(){
+  const code=document.getElementById('ad_code').value.trim(), he=document.getElementById('ad_he').value.trim(), en=document.getElementById('ad_en').value.trim();
+  if(!code||!he){ document.getElementById('ad_err').textContent=t('required2'); return; }
+  spin(true); const r=await api('admin/dept/create',{token:SES.token,code:code,name_he:he,name_en:en}); await refreshBoot(); spin(false);
+  if(!r.ok){ document.getElementById('ad_err').textContent=r.error; return; } render();
+}
+async function saveDept(id){
+  const he=document.getElementById('edh_'+id).value.trim(), en=document.getElementById('ede_'+id).value.trim(), code=document.getElementById('edc_'+id).value.trim();
+  if(!he){ document.getElementById('deptEditErr').textContent=t('required2'); return; }
+  spin(true); const r=await api('admin/dept/update',{token:SES.token,dept_id:id,code:code,name_he:he,name_en:en}); await refreshBoot(); spin(false);
+  if(!r.ok){ document.getElementById('deptEditErr').textContent=r.error; return; } render();
+}
+async function setDeptApprover(deptId){
+  const uid=document.getElementById('da_'+deptId).value;
+  if(!uid){ document.getElementById('da_err').textContent=t('pickUser'); return; }
+  spin(true); const r=await api('admin/dept_approver/set',{token:SES.token,dept_id:deptId,user_id:uid}); spin(false);
+  if(!r.ok){ document.getElementById('da_err').textContent=r.error; return; } render();
+}
+async function delDeptApprover(deptId,uid){
+  spin(true); const r=await api('admin/dept_approver/del',{token:SES.token,dept_id:deptId,user_id:uid}); spin(false);
+  if(!r.ok){ document.getElementById('da_err').textContent=r.error; return; } render();
+}
+async function addUser(){
+  const un=document.getElementById('au_un').value.trim(), fn=document.getElementById('au_fn').value.trim();
+  if(!un||!fn){ document.getElementById('au_err').textContent=t('required2'); return; }
+  spin(true);
+  const r=await api('admin/user/create',{token:SES.token,username:un,full:fn,email:document.getElementById('au_em').value.trim(),
+    dept_id:document.getElementById('au_dept').value||'',role:document.getElementById('au_role').value,password:document.getElementById('au_pw').value.trim()});
+  await refreshBoot(); spin(false);
+  if(!r.ok){ document.getElementById('au_err').textContent = r.error==='weak_password'?t('weakPw'):r.error; return; }
+  const em=document.getElementById('au_em').value.trim();
+  if(em){ alert(r.emailed ? t('welcomeSent')+' '+em : t('welcomeFailed')); }
+  render();
+}
+function editUser(i){
+  const u=ADMIN_USERS[i];
+  const deptOpts=BOOT.departments.map(d=>`<option value="${d.id}" ${d.id===u.dept_id?'selected':''}>${esc(deptName(d))}</option>`).join('');
+  document.getElementById('edit_user_box').innerHTML=`<div class="card" style="background:#f7fafc;margin-top:10px">
+    <h3>${t('editUser')}: ${esc(u.username)}</h3>
+    <div class="rowflex">
+      <div><label class="f">${t('name')}</label><input id="eu_fn" class="fld" value="${esc(u.full_name)}"></div>
+      <div><label class="f">${t('email')}</label><input id="eu_em" class="fld" dir="ltr" value="${esc(u.email||'')}"></div>
+    </div>
+    <div class="rowflex">
+      <div><label class="f">${t('dept')}</label><select id="eu_dept" class="fld"><option value="">${t('none')}</option>${deptOpts}</select></div>
+      <div><label class="f">${t('status')}</label><select id="eu_act" class="fld"><option value="Y">${t('active')}</option><option value="N">${t('inactive')}</option></select></div>
+    </div>
+    <div class="btnrow"><button class="btn ok" onclick="saveUser(${u.id})">${t('save')}</button>
+      <button class="btn ghost" onclick="document.getElementById('edit_user_box').innerHTML=''">${t('back')}</button></div>
+    <div id="eu_err" style="color:var(--danger);font-size:13px"></div></div>`;
+}
+async function saveUser(id){
+  spin(true);
+  const r=await api('admin/user/update',{token:SES.token,user_id:id,
+    full:document.getElementById('eu_fn').value.trim(),email:document.getElementById('eu_em').value.trim(),
+    dept_id:document.getElementById('eu_dept').value||'',is_active:document.getElementById('eu_act').value});
+  await refreshBoot(); spin(false);
+  if(!r.ok){ document.getElementById('eu_err').textContent=r.error; return; } render();
+}
+async function resetPw(id,username){
+  if(!confirm(t('resetPw')+' · '+username+'?')) return;
+  spin(true); const r=await api('admin/resetpw',{token:SES.token,user_id:id}); spin(false);
+  if(!r.ok){ alert(r.error); return; }
+  if(r.emailed){ alert(t('resetEmailed')+'\n'+(r.email||username)); }
+  else { alert(t('tempPwTitle')+'\n\n'+t('tempPwMsg')+'\n\n'+username+' : '+r.temp_password); }
+}
+async function addWetOp(){
+  const he=document.getElementById('wo_he').value.trim(), en=document.getElementById('wo_en').value.trim();
+  if(!he){ document.getElementById('wo_err').textContent=t('required2'); return; }
+  spin(true); const r=await api('admin/wetop/create',{token:SES.token,name_he:he,name_en:en}); await refreshBoot(); spin(false);
+  if(!r.ok){ document.getElementById('wo_err').textContent=r.error; return; } render();
+}
+async function delUser(id,username){
+  if(!confirm(t('confirmDel')+' '+username)) return;
+  spin(true); const r=await api('admin/user/delete',{token:SES.token,user_id:id}); spin(false);
+  if(!r.ok){
+    const map={cannot_delete_self:'לא ניתן למחוק את עצמך',user_has_bookings:'למשתמש יש הזמנות מקושרות — לא ניתן למחוק',user_not_found:'המשתמש לא נמצא'};
+    alert(map[r.error]||r.error); return;
+  }
+  render();
+}
+
+/* ── לוג כניסות (ADMIN) ── */
+async function renderLog(app){
+  app.innerHTML=`<div class="card"><h2>${t('loginLog')}</h2><div class="muted">…</div></div>`;
+  const r=await api('admin/logins',{token:SES.token});
+  const list=r.ok?(r.logins||[]):[];
+  const ar=await api('admin/attempts',{token:SES.token});
+  const att=ar.ok?(ar.attempts||[]):[];
+  const fails=att.filter(a=>a.success!=='Y').length;
+  app.innerHTML=`<div class="card"><h2>${t('loginLog')} <span class="muted" style="font-size:12px">(${list.length})</span></h2>
+    <input id="lgSearch" class="fld" placeholder="${t('search')}" oninput="filterLg()">
+    <div class="tablewrap" style="margin-top:8px"><table id="lgTable"><thead><tr>
+      <th>username</th><th>${t('name')}</th><th>${t('time')}</th></tr></thead>
+    <tbody>${list.map(l=>`<tr><td dir="ltr">${esc(l.username)}</td><td>${esc(l.full_name||t('none'))}</td><td dir="ltr">${esc(l.at)}</td></tr>`).join('')||`<tr><td colspan="3" class="muted">${t('none')}</td></tr>`}</tbody></table></div></div>
+  <div class="card"><h2>${t('loginAttempts')} <span class="muted" style="font-size:12px">(${t('failed')}: ${fails})</span></h2>
+    <p class="muted" style="font-size:12px;margin:0 0 8px">${t('lockNote')}</p>
+    <input id="atSearch" class="fld" placeholder="${t('search')}" oninput="filterAt()">
+    <div class="tablewrap" style="margin-top:8px"><table id="atTable"><thead><tr>
+      <th>username</th><th>IP</th><th>${t('result')}</th><th>${t('time')}</th></tr></thead>
+    <tbody>${att.map(a=>`<tr>
+      <td dir="ltr">${esc(a.username||'')}</td><td dir="ltr">${esc(a.ip||'—')}</td>
+      <td>${a.success==='Y'?`<span class="pill" style="background:var(--accent);color:#fff">✓</span>`:`<span class="pill" style="background:var(--danger);color:#fff">✗</span>`}</td>
+      <td dir="ltr">${esc(a.at)}</td></tr>`).join('')||`<tr><td colspan="4" class="muted">${t('none')}</td></tr>`}</tbody></table></div></div>`;
+}
+function filterAt(){ const q=document.getElementById('atSearch').value.toLowerCase();
+  document.querySelectorAll('#atTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
+function filterLg(){ const q=document.getElementById('lgSearch').value.toLowerCase();
+  document.querySelectorAll('#lgTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
+
+/* ── לוג מיילים + מעקב קריאה (ADMIN) ── */
+async function renderEmailLog(app){
+  app.innerHTML=`<div class="card"><h2>${t('emailLog')}</h2><div class="muted">…</div></div>`;
+  const r=await api('admin/emaillog',{token:SES.token});
+  const list=r.ok?(r.emails||[]):[];
+  const readCnt=list.filter(e=>e.opened==='Y').length;
+  app.innerHTML=`<div class="card"><h2>${t('emailLog')} <span class="muted" style="font-size:12px">(${list.length} · ${t('read')}: ${readCnt})</span></h2>
+    <p class="muted" style="font-size:12px;margin:0 0 8px">${t('emailLogNote')}</p>
+    <input id="emSearch" class="fld" placeholder="${t('search')}" oninput="filterEm()">
+    <div class="tablewrap" style="margin-top:8px"><table id="emTable"><thead><tr>
+      <th>${t('recipient')}</th><th>${t('kind')}</th><th>#</th><th>${t('sentAt')}</th><th>${t('readQ')}</th><th>${t('readAt')}</th></tr></thead>
+    <tbody>${list.map(e=>`<tr>
+      <td dir="ltr">${esc(e.to||'')}</td>
+      <td>${esc(emKind(e.kind))}</td>
+      <td>${e.booking_id?('#'+e.booking_id):'—'}</td>
+      <td dir="ltr">${esc(e.sent||'')}</td>
+      <td>${e.opened==='Y'?`<span class="pill" style="background:var(--accent);color:#fff">✓ ${t('yes')}</span>`:`<span class="muted">${t('no')}</span>`}</td>
+      <td dir="ltr">${esc(e.opened_at||'—')}${e.open_count>1?` <span class="muted">(${e.open_count})</span>`:''}</td>
+    </tr>`).join('')||`<tr><td colspan="6" class="muted">${t('none')}</td></tr>`}</tbody></table></div></div>`;
+}
+function emKind(k){ if(!k) return '—';
+  if(k==='AGENT_REQUEST') return t('emkAgentReq');
+  if(k==='APPROVER_QUOTE') return t('emkApprover');
+  if(k==='WELCOME') return t('emkWelcome');
+  if(k==='RESET') return t('emkReset');
+  if(k&&k.indexOf('STATUS:')===0){ const s=k.slice(7); return t('emkStatus')+': '+stLabel(s); }
+  return k; }
+function filterEm(){ const q=document.getElementById('emSearch').value.toLowerCase();
+  document.querySelectorAll('#emTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
+
+/* ── כספים / דוחות ── */
+let FIN_ALL=[];        // כל ההזמנות
+let FIN_VIEW=[];       // לאחר סינון
+const FIN_COLS=[       // עמודות זמינות לייצוא
+  ['seq','#'],['status','status'],['dept','dept'],['route','route'],['pax','pax'],
+  ['initiator','initiator'],['agent','agent'],['openDate','openDate'],['departure','departure'],
+  ['ticketingDate','ticketingDate'],['price','price'],['currency','currency'],['pnr','pnr'],
+  ['prefTime','prefTime'],['wetOp','wetOp'],['updatedBy','updatedBy']];
+let FIN_SELCOLS=FIN_COLS.map(c=>c[0]);   // ברירת מחדל: הכל
+const TPL_KEY='arkia_report_templates';
+function loadTpls(){ try{ return JSON.parse(localStorage.getItem(TPL_KEY)||'{}'); }catch(e){ return {}; } }
+function saveTpls(o){ localStorage.setItem(TPL_KEY,JSON.stringify(o)); }
+
+async function renderFinance(app){
+  app.innerHTML=`<div class="card"><h2>${t('finance')}</h2><div class="muted">…</div></div>`;
+  const r=await api('bookings',{token:SES.token});
+  FIN_ALL=r.ok?(r.bookings||[]):[];
+  FIN_VIEW=FIN_ALL.slice();
+  drawFinance(app);
+}
+function drawFinance(app){
+  const list=FIN_VIEW;
+  const openN=list.filter(b=>!stTerminal(b.status)).length;
+  const tkN=list.filter(b=>b.status==='TICKETED').length;
+  const cnN=list.filter(b=>b.status==='CANCELLED').length;
+  const paxTot=list.reduce((s,b)=>s+(Number(b.pax)||0),0);
+  const sums={};
+  list.filter(b=>b.status==='TICKETED'&&b.price!=null).forEach(b=>{sums[b.currency]=(sums[b.currency]||0)+Number(b.price);});
+  const sumCards=Object.keys(sums).map(c=>`<div class="kpi"><div class="l">${c} · ${t('ticketed')}</div><div class="n">${curSym(c)+sums[c].toLocaleString()}</div></div>`).join('');
+  const deptOpts=BOOT.departments.map(d=>`<option value="${d.id}">${esc(deptName(d))}</option>`).join('');
+  const stOpts=(BOOT.statuses||[]).map(s=>`<option value="${s.code}">${VIEW.lang==='en'?s.en:s.he}</option>`).join('');
+  const tpls=loadTpls(); const tplOpts=Object.keys(tpls).map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('');
+  app.innerHTML=`<div class="card"><h2>${t('finance')} · ${t('filters')}</h2>
+    <div class="rowflex">
+      <div><label class="f">${t('fromDate')} (${t('ticketingDate')})</label><input id="f_from" class="fld" type="date"></div>
+      <div><label class="f">${t('toDate')}</label><input id="f_to" class="fld" type="date"></div>
+      <div><label class="f">${t('dept')}</label><select id="f_dept" class="fld"><option value="">${t('all')}</option>${deptOpts}</select></div>
+      <div><label class="f">${t('status')}</label><select id="f_status" class="fld"><option value="">${t('all')}</option>${stOpts}</select></div>
+    </div>
+    <div class="btnrow"><button class="btn" onclick="applyFin()">${t('applyFilters')}</button>
+      <button class="btn ghost" onclick="clearFin()">${t('clearFilters')}</button></div>
+  </div>
+  <div class="card"><h2>${t('dashboard')}</h2>
+    <div class="grid">
+      <div class="kpi"><div class="l">${t('total')}</div><div class="n">${list.length}</div></div>
+      <div class="kpi"><div class="l">${t('open')}</div><div class="n">${openN}</div></div>
+      <div class="kpi"><div class="l">${t('ticketed')}</div><div class="n">${tkN}</div></div>
+      <div class="kpi"><div class="l">${t('cancelled')}</div><div class="n">${cnN}</div></div>
+      <div class="kpi"><div class="l">${t('pax')}</div><div class="n">${paxTot}</div></div>
+      ${sumCards}
+    </div>
+  </div>
+  <div class="card"><h2>${t('exportExcel')}</h2>
+    <div class="btnrow"><button class="btn ghost sm" onclick="exportCSV()">⬇ ${t('exportExcel')}</button></div>
+    ${hasRole('ADMIN')?`
+    <h3>${t('reportTemplate')} · ${t('columns')}</h3>
+    <div class="cols">${FIN_COLS.map(c=>`<label><input type="checkbox" onchange="toggleCol('${c[0]}',this.checked)" ${FIN_SELCOLS.includes(c[0])?'checked':''}> ${t(c[1])}</label>`).join('')}</div>
+    <div class="rowflex" style="align-items:flex-end">
+      <div><label class="f">${t('templateName')}</label><input id="tpl_name" class="fld" placeholder="${t('templateName')}"></div>
+      <div style="flex:0 0 auto"><button class="btn sm" onclick="saveTpl()">${t('saveTemplate')}</button></div>
+      <div><label class="f">${t('loadTemplate')}</label><select id="tpl_sel" class="fld"><option value="">${t('none')}</option>${tplOpts}</select></div>
+      <div style="flex:0 0 auto"><button class="btn ghost sm" onclick="loadTpl()">${t('loadTemplate')}</button>
+        <button class="btn danger sm" onclick="delTpl()">${t('del')}</button></div>
+    </div>`:''}
+  </div>
+  <div class="card"><h2>${t('bookings')}</h2>
+    <div class="tablewrap"><table><thead><tr>
+      <th>#</th><th>${t('status')}</th><th>${t('dept')}</th><th>${t('route')}</th><th>${t('pax')}</th><th>${t('initiator')}</th><th>${t('agent')}</th>
+      <th>${t('openDate')}</th><th>${t('departure')}</th><th>${t('ticketingDate')}</th><th>${t('price')}</th><th>${t('pnr')}</th>
+    </tr></thead><tbody>${list.map(b=>`<tr onclick="openBk(${b.id})">
+      <td>${b.seq}</td><td><span class="badge st-${b.status}">${stLabel(b.status)}</span></td>
+      <td>${esc(VIEW.lang==='en'?b.dept_en:b.dept_he)}</td><td>${esc(routeLabel(b))}</td><td>${b.pax||1}</td><td>${esc(b.initiator)}</td><td>${esc(b.agent||t('none'))}</td>
+      <td>${b.open_date||''}</td><td>${b.departure_date||''}</td><td>${b.ticketing_date||''}</td>
+      <td>${b.price!=null?curSym(b.currency)+Number(b.price).toLocaleString():''}</td><td>${esc(b.pnr||'')}</td>
+    </tr>`).join('')||`<tr><td colspan="12" class="muted">${t('noBookings')}</td></tr>`}</tbody></table></div></div>`;
+}
+function applyFin(){
+  const from=document.getElementById('f_from').value, to=document.getElementById('f_to').value;
+  const dep=document.getElementById('f_dept').value, st=document.getElementById('f_status').value;
+  FIN_VIEW=FIN_ALL.filter(b=>{
+    if(from && (!b.ticketing_date || b.ticketing_date<from)) return false;
+    if(to && (!b.ticketing_date || b.ticketing_date>to)) return false;
+    if(dep && String(b.dept_id)!==String(dep)) return false;
+    if(st && b.status!==st) return false;
+    return true;
+  });
+  drawFinance(document.getElementById('app'));
+}
+function clearFin(){ FIN_VIEW=FIN_ALL.slice(); drawFinance(document.getElementById('app')); }
+function toggleCol(k,on){ if(on){ if(!FIN_SELCOLS.includes(k)) FIN_SELCOLS.push(k); } else { FIN_SELCOLS=FIN_SELCOLS.filter(x=>x!==k); } }
+function colVal(b,k){
+  switch(k){
+    case 'seq':return b.seq; case 'status':return stLabel(b.status);
+    case 'dept':return VIEW.lang==='en'?b.dept_en:b.dept_he; case 'route':return routeLabel(b);
+    case 'pax':return b.pax||1; case 'initiator':return b.initiator; case 'agent':return b.agent||'';
+    case 'openDate':return b.open_date||''; case 'departure':return b.departure_date||'';
+    case 'ticketingDate':return b.ticketing_date||''; case 'price':return b.price!=null?b.price:'';
+    case 'currency':return b.currency; case 'pnr':return b.pnr||'';
+    case 'prefTime':return b.pref_time||''; case 'wetOp':return VIEW.lang==='en'?(b.wet_op_en||''):(b.wet_op_he||'');
+    case 'updatedBy':return b.updated_by||''; default:return '';
+  }
+}
+function csvEsc(v){ v=String(v==null?'':v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+function exportCSV(){
+  const cols=FIN_COLS.filter(c=>FIN_SELCOLS.includes(c[0]));
+  const head=cols.map(c=>t(c[1]));
+  const rows=FIN_VIEW.map(b=>cols.map(c=>colVal(b,c[0])));
+  const csv='﻿'+[head.join(','),...rows.map(r=>r.map(csvEsc).join(','))].join('\n');
+  const url=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'}));
+  const a=document.createElement('a'); a.href=url; a.download='bookings.csv'; a.click(); URL.revokeObjectURL(url);
+}
+function saveTpl(){
+  const name=document.getElementById('tpl_name').value.trim(); if(!name){ alert(t('required2')); return; }
+  const o=loadTpls(); o[name]={cols:FIN_SELCOLS.slice()}; saveTpls(o);
+  drawFinance(document.getElementById('app'));
+}
+function loadTpl(){
+  const name=document.getElementById('tpl_sel').value; if(!name) return;
+  const o=loadTpls(); if(o[name]){ FIN_SELCOLS=o[name].cols.slice(); drawFinance(document.getElementById('app')); }
+}
+function delTpl(){
+  const name=document.getElementById('tpl_sel').value; if(!name) return;
+  const o=loadTpls(); delete o[name]; saveTpls(o); drawFinance(document.getElementById('app'));
+}
+
+/* ── הזמנה חדשה ── */
+function renderNew(app){
+  const dep=BOOT.departments.find(d=>d.id===SES.user.dept_id);
+  const acmi=isACMI(SES.user.dept_id);
+  const wetOpts=(BOOT.wet_operators||[]).map(w=>`<option value="${w.id}">${esc(VIEW.lang==='en'?w.name_en:w.name_he)}</option>`).join('');
+  app.innerHTML=`<div class="card"><h2>${t('newB')}</h2>
+    <p class="muted">${t('dept')}: <b>${dep?esc(deptName(dep)):t('none')}</b> · <span class="pill">${t('openPool')}</span></p>
+    <div class="rowflex">
+      <div><label class="f">${t('departure')} *</label><input id="n_dep" class="fld" type="date"></div>
+      <div><label class="f">${t('prefTime')} ${t('optional')}</label><input id="n_time" class="fld" type="time"></div>
+      <div><label class="f">${t('pax')}</label><input id="n_pax" class="fld" type="number" min="1" value="1"></div>
+    </div>
+    <div class="rowflex">
+      <div><label class="f">${t('origin')}</label>${acInput('n_org','TLV')}</div>
+      <div><label class="f">${t('dest')}</label>${acInput('n_dst','',t('chooseDest'))}</div>
+      ${acmi?`<div><label class="f">${t('wetOp')}</label><select id="n_wet" class="fld"><option value="">${t('none')}</option>${wetOpts}</select></div>`:''}
+    </div>
+    <label class="f">${t('quoteNotes')}</label><textarea id="n_note" class="fld" rows="2"></textarea>
+    <label class="f">${t('attachReq')}</label><input id="n_file" class="fld" type="file" accept=".xlsx,.xls,.csv,application/pdf,image/*">
+    <div class="btnrow"><button class="btn ok" onclick="createBooking()">${t('sendToAgents')}</button></div>
+    <div id="n_err" style="color:var(--danger);margin-top:6px"></div></div>`;
+}
+async function createBooking(){
+  const dep=document.getElementById('n_dep').value;
+  if(!dep){ document.getElementById('n_err').textContent=t('required2'); return; }
+  const wetEl=document.getElementById('n_wet');
+  spin(true);
+  const r=await api('bookings/create',{token:SES.token,departure:dep,
+    notes:document.getElementById('n_note').value||'',
+    pax:document.getElementById('n_pax').value||'1',
+    pref_time:document.getElementById('n_time').value||'',
+    wet_op:wetEl?(wetEl.value||''):'',
+    origin:acGet('n_org'),
+    dest:acGet('n_dst')});
+  if(!r.ok){ spin(false); document.getElementById('n_err').textContent=r.error; return; }
+  const fi=document.getElementById('n_file');
+  if(fi && fi.files.length){ const f=fi.files[0], b64=await fileToB64(f);
+    await api('files/upload',{token:SES.token,booking_id:r.id,kind:'OTHER',filename:f.name,mime:f.type,data:b64}); }
+  spin(false);
+  VIEW.tab='bookings'; VIEW.bookingId=r.id; render();
+}
+
+/* ── הצעת מחיר דחופה (סוכן יוזם) ── */
+function renderUrgent(app){
+  const deptOpts=BOOT.departments.map(d=>`<option value="${d.id}">${esc(deptName(d))}</option>`).join('');
+  const curOpts=BOOT.currencies.map(c=>`<option value="${c.code}" ${c.is_default==='Y'?'selected':''}>${c.code} ${c.symbol}</option>`).join('');
+  app.innerHTML=`<div class="card">
+    <h2><span class="badge" style="background:var(--danger);color:#fff">${t('urgent')}</span> ${t('urgentQuote')}</h2>
+    <p class="muted">הצעה יזומה ללא בקשה מוקדמת — בחר את המחלקה שהמאשר שלה יאשר.</p>
+    <div class="rowflex">
+      <div><label class="f">${t('dept')} *</label><select id="u_dept" class="fld"><option value="">${t('none')}</option>${deptOpts}</select></div>
+      <div><label class="f">${t('departure')} *</label><input id="u_dep" class="fld" type="date"></div>
+      <div><label class="f">${t('pax')}</label><input id="u_pax" class="fld" type="number" min="1" value="1"></div>
+    </div>
+    <div class="rowflex">
+      <div><label class="f">${t('origin')}</label>${acInput('u_org','TLV')}</div>
+      <div><label class="f">${t('dest')}</label>${acInput('u_dst','',t('chooseDest'))}</div>
+      <div><label class="f">${t('prefTime')} ${t('optional')}</label><input id="u_time" class="fld" type="time"></div>
+    </div>
+    <div class="rowflex">
+      <div><label class="f">${t('price')} *</label><input id="u_price" class="fld" type="number" min="0"></div>
+      <div><label class="f">${t('currency')}</label><select id="u_cur" class="fld">${curOpts}</select></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13.5px;cursor:pointer"><input type="checkbox" id="u_lowcost"> ${t('lowCostQ')}</label>
+    <label class="f">${t('tripDetails')}</label><textarea id="u_trip" class="fld" rows="2"></textarea>
+    <label class="f">${t('quoteNotes')}</label><textarea id="u_note" class="fld" rows="2"></textarea>
+    <label class="f">${t('uploadScreenshot')} *</label><input id="u_file" class="fld" type="file" accept="image/*,application/pdf">
+    <div class="btnrow"><button class="btn danger" onclick="submitUrgent()">${t('send')} · ${t('urgent')}</button></div>
+    <div id="u_err" style="color:var(--danger);margin-top:6px"></div></div>`;
+}
+async function submitUrgent(){
+  const dept=document.getElementById('u_dept').value, dep=document.getElementById('u_dep').value;
+  const price=document.getElementById('u_price').value, fi=document.getElementById('u_file');
+  if(!dept||!dep||!price||!fi.files.length){ document.getElementById('u_err').textContent=t('required2'); return; }
+  spin(true);
+  const r=await api('agent/quote/create',{token:SES.token,dept_id:dept,departure:dep,
+    pax:document.getElementById('u_pax').value||'1',pref_time:document.getElementById('u_time').value||'',
+    origin:acGet('u_org'),dest:acGet('u_dst'),
+    price:price,currency:document.getElementById('u_cur').value,
+    trip:document.getElementById('u_trip').value||'',notes:document.getElementById('u_note').value||'',
+    low_cost:document.getElementById('u_lowcost').checked?'Y':'N'});
+  if(!r.ok){ spin(false); document.getElementById('u_err').textContent=r.error; return; }
+  const f=fi.files[0], b64=await fileToB64(f);
+  await api('files/upload',{token:SES.token,booking_id:r.id,kind:'QUOTE_SCREENSHOT',filename:f.name,mime:f.type,data:b64});
+  spin(false);
+  await refreshUnread(); VIEW.tab='bookings'; VIEW.bookingId=r.id; render();
+}
+
+/* ── פירוט הזמנה ── */
+async function renderDetail(app,id){
+  app.innerHTML=`<div class="card"><div class="muted">…</div></div>`;
+  const r=await api('bookings/get',{token:SES.token,id:id});
+  if(!r.ok||!r.booking){ VIEW.bookingId=null; return render(); }
+  const b=r.booking, files=r.files||[], log=r.log||[];
+  if(VIEW.editing) return renderEdit(app,b);
+  const cobrand = b.agent_id?`<div class="cobrand">
+    <img src="/ords/arkia/api/assets/arkia" alt="Arkia" onerror="this.replaceWith('ARKIA')">
+    <span class="x">✕</span>
+    <img src="/ords/arkia/api/assets/teltos" alt="${esc(b.agent)}" onerror="this.replaceWith(Object.assign(document.createElement('b'),{textContent:'${esc(b.agent)}'}))">
+    <span class="muted" style="font-size:12px">${t('cobrandNote')}: <b>${esc(b.agent)}</b></span></div>`:'';
+  const kpi=(l,v)=>`<div class="kpi"><div class="l">${l}</div><div class="n">${v}</div></div>`;
+  const wetName=VIEW.lang==='en'?b.wet_op_en:b.wet_op_he;
+  app.innerHTML=`<div class="card">
+    <div class="btnrow" style="margin:0 0 10px"><button class="btn ghost sm" onclick="VIEW.bookingId=null;render()">← ${t('back')}</button>
+      ${canEdit(b)?`<button class="btn ghost sm" onclick="VIEW.editing=true;render()">✎ ${t('edit')}</button>`:''}</div>
+    ${b.urgent==='Y'?`<div style="background:var(--danger);color:#fff;font-weight:800;text-align:center;border-radius:8px;padding:8px 10px;margin-bottom:10px">⚠ ${t('urgentQuote')}</div>`:''}
+    ${cobrand}
+    <h2>${t('details')} #${b.seq} <span class="badge st-${b.status}">${stLabel(b.status)}</span>${b.low_cost==='Y'?` <span class="badge" style="background:var(--warn);color:#fff">${t('lowCost')}</span>`:''}</h2>
+    <div class="grid">
+      ${kpi(t('dept'),esc(VIEW.lang==='en'?b.dept_en:b.dept_he))}
+      ${kpi(t('route'),esc(routeLabel(b)))}
+      ${kpi(t('pax'),b.pax||1)}
+      ${b.pref_time?kpi(t('prefTime'),esc(b.pref_time)):''}
+      ${wetName?kpi(t('wetOp'),esc(wetName)):''}
+      ${kpi(t('initiator'),esc(b.initiator))}
+      ${kpi(t('agent'),esc(b.agent||t('none')))}
+      ${kpi(t('approver'),esc(b.approver||t('none')))}
+      ${kpi(t('openDate'),b.open_date||t('none'))}
+      ${kpi(t('departure'),b.departure_date||t('none'))}
+      ${kpi(t('ticketingDate'),b.ticketing_date||t('none'))}
+      ${kpi(t('price'),b.price!=null?curSym(b.currency)+Number(b.price).toLocaleString()+' '+b.currency:t('none'))}
+      ${kpi(t('pnr'),esc(b.pnr||t('none')))}
+    </div>
+    ${b.origin||b.dest?`<h3>${t('route')}</h3><div class="muted">${esc(apLabel(b.origin))} → ${esc(apLabel(b.dest))}</div>`:''}
+    ${b.trip_details?`<h3>${t('tripDetails')}</h3><div class="muted">${esc(b.trip_details)}</div>`:''}
+    ${b.quote_notes?`<h3>${t('quoteNotes')}</h3><div class="muted">${esc(b.quote_notes)}</div>`:''}
+    ${b.rejection_reason?`<h3>${t('reject')} · ${t('reason')}</h3><div class="muted">${esc(b.rejection_reason)}</div>`:''}
+    ${b.cancel_reason?`<h3>${t('requestCancel')} · ${t('reason')}</h3><div class="muted">${esc(b.cancel_reason)}</div>`:''}
+    <div id="actions">${actionsHtml(b)}</div>
+  </div>
+  <div class="card"><h2>${t('files')}</h2>${
+    files.length?files.map(f=>{const kl=f.kind==='QUOTE_SCREENSHOT'?t('uploadScreenshot'):(f.kind==='FINAL_TICKET'?t('uploadTicket'):t('attachedFile'));
+      const url=API+'files/'+f.id;
+      return `<div class="filerow">📄<div style="flex:1"><b>${kl}</b><br><span class="muted">${esc(f.filename)}</span></div>
+        <a class="btn ghost sm" href="${url}" target="_blank">${t('view')}</a>
+        <a class="btn ghost sm" href="${url}" download="${esc(f.filename)}">${t('download')}</a></div>`;}).join(''):`<div class="muted">${t('none')}</div>`}
+  </div>
+  <div class="card"><h2>${t('timeline')}</h2><ul class="timeline">${
+    log.map(l=>`<li><span class="dot"></span>
+      <div class="tl-h">${l.from&&l.from!==l.to?stLabel(l.from)+' → ':''}${stLabel(l.to)}</div>
+      <div class="tl-m">${t('who')}: ${esc(l.by)} · ${l.at}</div>
+      ${l.note?`<div class="tl-note">${esc(l.note)}</div>`:''}</li>`).join('')}</ul></div>`;
+}
+function canEdit(b){
+  if(['TICKETED','CANCELLED','REJECTED'].includes(b.status)) return false;
+  if(hasRole('ADMIN')) return true;
+  if(b.initiator_id===SES.user.id) return true;
+  if(b.can_approve==='Y') return true;
+  return false;
+}
+function renderEdit(app,b){
+  const acmi=b.dept_code==='ACMI'||isACMI(b.dept_id);
+  const wetOpts=(BOOT.wet_operators||[]).map(w=>`<option value="${w.id}" ${w.id===b.wet_op_id?'selected':''}>${esc(VIEW.lang==='en'?w.name_en:w.name_he)}</option>`).join('');
+  app.innerHTML=`<div class="card">
+    <div class="btnrow" style="margin:0 0 10px"><button class="btn ghost sm" onclick="VIEW.editing=false;render()">← ${t('back')}</button></div>
+    <h2>${t('editBooking')} #${b.seq}</h2>
+    <div class="rowflex">
+      <div><label class="f">${t('departure')}</label><input id="e_dep" class="fld" type="date" value="${b.departure_date||''}"></div>
+      <div><label class="f">${t('prefTime')} ${t('optional')}</label><input id="e_time" class="fld" type="time" value="${esc(b.pref_time||'')}"></div>
+      <div><label class="f">${t('pax')}</label><input id="e_pax" class="fld" type="number" min="1" value="${b.pax||1}"></div>
+    </div>
+    <div class="rowflex">
+      <div><label class="f">${t('origin')}</label>${acInput('e_org',b.origin||'')}</div>
+      <div><label class="f">${t('dest')}</label>${acInput('e_dst',b.dest||'',t('chooseDest'))}</div>
+      ${acmi?`<div><label class="f">${t('wetOp')}</label><select id="e_wet" class="fld"><option value="">${t('none')}</option>${wetOpts}</select></div>`:''}
+    </div>
+    <label class="f">${t('quoteNotes')}</label><textarea id="e_note" class="fld" rows="2">${esc(b.quote_notes||'')}</textarea>
+    <div class="btnrow"><button class="btn ok" onclick="saveEdit(${b.id})">${t('save')}</button>
+      <button class="btn ghost" onclick="VIEW.editing=false;render()">${t('back')}</button></div>
+    <div id="e_err" style="color:var(--danger);margin-top:6px"></div></div>`;
+}
+async function saveEdit(id){
+  const wetEl=document.getElementById('e_wet');
+  spin(true);
+  const r=await api('bookings/edit',{token:SES.token,id:id,
+    departure:document.getElementById('e_dep').value||'',
+    notes:document.getElementById('e_note').value||'',
+    pax:document.getElementById('e_pax').value||'',
+    pref_time:document.getElementById('e_time').value||'',
+    wet_op:wetEl?(wetEl.value||''):'',
+    origin:acGet('e_org'),
+    dest:acGet('e_dst')});
+  spin(false);
+  if(!r.ok){ document.getElementById('e_err').textContent=r.error; return; }
+  VIEW.editing=false; render();
+}
+function actionsHtml(b){
+  const isAgent = hasRole('AGENT') && SES.agent_id && b.agent_id===SES.agent_id;
+  const canQuote = hasRole('AGENT') && SES.agent_id && (b.agent_id===SES.agent_id || !b.agent_id);
+  const isApprover = b.can_approve==='Y';
+  const isInitiator = b.initiator_id===SES.user.id;
+  let h='';
+  if(b.status==='AWAITING_QUOTE'&&canQuote) h+=`<button class="btn" onclick="quoteForm(${b.id},'${b.currency}')">${t('submitQuote')}</button>`;
+  if(b.status==='QUOTE_RECEIVED'&&isApprover){ h+=`<button class="btn ok" onclick="act(${b.id},'approve')">${t('approve')}</button>`;
+    h+=`<button class="btn danger" onclick="actReason(${b.id},'reject')">${t('reject')}</button>`; }
+  if(b.status==='APPROVED'&&isAgent) h+=`<button class="btn" onclick="ticketForm(${b.id})">${t('ticket')}</button>`;
+  if(b.status==='CANCEL_REQUESTED'&&isAgent) h+=`<button class="btn warn" onclick="act(${b.id},'confirm_cancel')">${t('confirmCancel')}</button>`;
+  if((isInitiator||isApprover)&&!stTerminal(b.status)&&b.status!=='CANCEL_REQUESTED'){
+    const cl=b.status==='TICKETED'?t('requestCancel'):t('cancelBooking');
+    h+=`<button class="btn ghost" onclick="actReason(${b.id},'request_cancel')">${cl}</button>`;
+  }
+  return h?`<div class="btnrow">${h}</div>`:'';
+}
+async function act(id,action,extra){
+  spin(true); const r=await api('bookings/action',Object.assign({token:SES.token,id:id,action:action},extra||{})); spin(false);
+  if(!r.ok){ alert(r.error); return; }
+  await refreshUnread(); render();
+}
+function actReason(id,action){ const r=prompt(t('reason')+':'); if(r===null) return; act(id,action,{reason:r,notes:r}); }
+
+function fileToB64(file){ return new Promise((res,rej)=>{ const rd=new FileReader();
+  rd.onload=()=>res(String(rd.result).split(',')[1]||''); rd.onerror=rej; rd.readAsDataURL(file); }); }
+
+function quoteForm(id,cur){
+  const curOpts=BOOT.currencies.map(c=>`<option value="${c.code}" ${c.code===cur?'selected':''}>${c.code} ${c.symbol}</option>`).join('');
+  document.getElementById('actions').innerHTML=`<h3>${t('submitQuote')}</h3>
+    <div class="rowflex"><div><label class="f">${t('price')} *</label><input id="q_price" class="fld" type="number" min="0"></div>
+      <div><label class="f">${t('currency')}</label><select id="q_cur" class="fld">${curOpts}</select></div></div>
+    <label style="display:flex;align-items:center;gap:8px;margin:8px 0;font-size:13.5px;cursor:pointer"><input type="checkbox" id="q_lowcost"> ${t('lowCostQ')}</label>
+    <label class="f">${t('tripDetails')}</label><textarea id="q_trip" class="fld" rows="3"></textarea>
+    <label class="f">${t('quoteNotes')}</label><textarea id="q_note" class="fld" rows="2"></textarea>
+    <label class="f">${t('uploadScreenshot')} *</label><input id="q_file" class="fld" type="file" accept="image/*,application/pdf">
+    <div class="btnrow"><button class="btn ok" onclick="submitQuote(${id})">${t('submitQuote')}</button>
+      <button class="btn ghost" onclick="render()">${t('back')}</button></div>
+    <div id="q_err" style="color:var(--danger);font-size:13px;margin-top:6px"></div>`;
+}
+async function submitQuote(id){
+  const price=document.getElementById('q_price').value, fi=document.getElementById('q_file');
+  if(!price||!fi.files.length){ document.getElementById('q_err').textContent=t('required2'); return; }
+  spin(true);
+  const f=fi.files[0], b64=await fileToB64(f);
+  let up=await api('files/upload',{token:SES.token,booking_id:id,kind:'QUOTE_SCREENSHOT',filename:f.name,mime:f.type,data:b64});
+  if(!up.ok){ spin(false); document.getElementById('q_err').textContent=up.error; return; }
+  const r=await api('bookings/action',{token:SES.token,id:id,action:'submit_quote',price:price,
+    currency:document.getElementById('q_cur').value,trip:document.getElementById('q_trip').value||'',
+    notes:document.getElementById('q_note').value||'',
+    low_cost:document.getElementById('q_lowcost').checked?'Y':'N'});
+  spin(false);
+  if(!r.ok){ document.getElementById('q_err').textContent=r.error; return; }
+  await refreshUnread(); render();
+}
+function ticketForm(id){
+  document.getElementById('actions').innerHTML=`<h3>${t('ticket')}</h3>
+    <div class="rowflex"><div><label class="f">${t('pnr')} *</label><input id="tk_pnr" class="fld"></div></div>
+    <label class="f">${t('uploadTicket')} *</label><input id="tk_file" class="fld" type="file" accept="image/*,application/pdf">
+    <div class="btnrow"><button class="btn ok" onclick="submitTicket(${id})">${t('ticket')}</button>
+      <button class="btn ghost" onclick="render()">${t('back')}</button></div>
+    <div id="tk_err" style="color:var(--danger);font-size:13px;margin-top:6px"></div>`;
+}
+async function submitTicket(id){
+  const pnr=document.getElementById('tk_pnr').value.trim(), fi=document.getElementById('tk_file');
+  if(!pnr||!fi.files.length){ document.getElementById('tk_err').textContent=t('required2'); return; }
+  spin(true);
+  const f=fi.files[0], b64=await fileToB64(f);
+  let up=await api('files/upload',{token:SES.token,booking_id:id,kind:'FINAL_TICKET',filename:f.name,mime:f.type,data:b64});
+  if(!up.ok){ spin(false); document.getElementById('tk_err').textContent=up.error; return; }
+  const r=await api('bookings/action',{token:SES.token,id:id,action:'ticket',pnr:pnr,ref:'',tdate:''});
+  spin(false);
+  if(!r.ok){ document.getElementById('tk_err').textContent=r.error; return; }
+  await refreshUnread(); render();
+}
+
+/* ── התראות ── */
+function openBell(){ VIEW.tab='notifications'; VIEW.bookingId=null; render(); }
+async function renderNotifications(app){
+  app.innerHTML=`<div class="card"><h2>${t('notifications')}</h2><div class="muted">…</div></div>`;
+  const r=await api('notifications',{token:SES.token});
+  const list=r.ok?(r.notifications||[]):[];
+  const nOn=SES.user.notify_email!=='N';
+  app.innerHTML=`<div class="card"><div style="display:flex;align-items:center;gap:10px">
+    <h2 style="margin:0;flex:1">${t('notifications')}</h2>
+    <button class="btn ghost sm" onclick="markAllRead()">${t('markRead')}</button></div>
+    <div style="margin-top:8px;display:flex;align-items:center;gap:10px;font-size:13px">
+      <span>${t('emailNotif')}:</span>
+      <button class="btn ${nOn?'ok':'ghost'} sm" onclick="toggleNotify()">${nOn?t('emailOn'):t('emailOff')}</button>
+    </div>
+    ${bioSupported()?`<div style="margin-top:8px;display:flex;align-items:center;gap:10px;font-size:13px">
+      <span>${t('bioLogin')}:</span>
+      ${bioEnabled()
+        ? `<button class="btn ok sm" onclick="bioDisable()">${t('bioOn')}</button>`
+        : `<button class="btn ghost sm" onclick="bioRegister()">${t('bioOff')}</button>`}
+    </div>`:''}
+    <div style="margin-top:10px">${list.map(n=>`<div class="notif ${n.is_read==='N'?'unread':''}" onclick="openFromNotif(${n.booking_id||'null'})">
+      <span>🔔</span><div style="flex:1">${esc(n.message)}<div class="t">${n.at}</div></div></div>`).join('')||`<div class="muted">${t('noNotif')}</div>`}</div></div>`;
+}
+async function toggleNotify(){
+  const to=SES.user.notify_email==='N'?'Y':'N';
+  spin(true); const r=await api('notify/set',{token:SES.token,on:to}); spin(false);
+  if(r.ok){ SES.user.notify_email=to; saveSession(); } render();
+}
+async function markAllRead(){ spin(true); await api('notifications/read',{token:SES.token}); await refreshUnread(); spin(false); render(); }
+async function openFromNotif(bid){ await api('notifications/read',{token:SES.token}); await refreshUnread();
+  if(bid){ VIEW.tab='bookings'; VIEW.bookingId=bid; } render(); }
+
+/* ── init ── */
+document.getElementById('unlockBtn').onclick=doLogin;
+document.getElementById('lk_pw').addEventListener('keydown',e=>{ if(e.key==='Enter') doLogin(); });
+document.getElementById('langBtn').onclick=toggleLang;
+document.getElementById('logoutBtn').onclick=logout;
+document.getElementById('bellBtn').onclick=openBell;
+document.getElementById('guideBtn').onclick=()=>window.open(API+'assets/guide','_blank');
+// Service Worker — דואג שה-PWA תמיד יטען את הגרסה העדכנית (מונע היתקעות במטמון)
+if('serviceWorker' in navigator){ try{ navigator.serviceWorker.register('/ords/arkia/api/sw'); }catch(e){} }
+tryRestore();   // מובייל: להישאר מחובר בין כניסות
+</script>
+</body>
+</html>
