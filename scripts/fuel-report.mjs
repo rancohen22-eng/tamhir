@@ -143,6 +143,10 @@ async function fetchBarchartFutures() {
   const url = `https://ondemand.websol.barchart.com/getQuote.json?${params}`;
   const json = await getJson(url);
   const results = json?.results ?? [];
+
+  // מחיר הסגירה בתחילת החודש לכל חוזה (best-effort; אם נכשל — פשוט לא תוצג ההשוואה).
+  const monthStarts = await fetchContractsMonthStart(symbols);
+
   const out = { BRENT: [], WTI: [] };
   for (const r of results) {
     const m = meta[r.symbol];
@@ -154,9 +158,30 @@ async function fetchBarchartFutures() {
       price: Number(r.lastPrice),
       net: r.netChange == null ? null : Number(r.netChange),
       pct: r.percentChange == null ? null : Number(String(r.percentChange).replace('%', '')),
+      monthStart: monthStarts[r.symbol] ?? null,
     });
   }
   for (const k of Object.keys(out)) out[k].sort((a, b) => (a.period < b.period ? -1 : 1));
+  return out;
+}
+
+// מושך לכל חוזה את מחיר הסגירה ביום המסחר הראשון של החודש הנוכחי (Barchart getHistory).
+// מחזיר מפה symbol -> price. שגיאה בחוזה בודד לא מפילה את השאר.
+async function fetchContractsMonthStart(symbols) {
+  const now = new Date();
+  const startDate = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}01`;
+  const out = {};
+  await Promise.all(symbols.map(async (sym) => {
+    try {
+      const p = new URLSearchParams({
+        apikey: BARCHART_API_KEY, symbol: sym, type: 'daily', startDate, maxRecords: '1',
+        order: 'asc',
+      });
+      const json = await getJson(`https://ondemand.websol.barchart.com/getHistory.json?${p}`);
+      const first = json?.results?.[0];
+      if (first?.close != null) out[sym] = Number(first.close);
+    } catch { /* best-effort per contract */ }
+  }));
   return out;
 }
 
@@ -204,14 +229,26 @@ function deltaCell(d) {
   return `<td style="color:${color};white-space:nowrap;font-weight:600">${arrow} ${sign}${d.abs.toFixed(2)}${pct}</td>`;
 }
 
-// שורת חוזה בסגנון ה-watchlist של Barchart.
+// תגית שינוי צבועה (אחוז + ערך מוחלט). up=ירוק, down=אדום.
+function changeTag(pct, abs) {
+  if (pct == null && abs == null) return '<div style="color:#5b6b7f;text-align:center;font-size:12px">—</div>';
+  const basis = pct ?? abs ?? 0;
+  const flat = basis === 0;
+  const bg = flat ? '#7a8699' : basis > 0 ? '#0e7a4e' : '#b3261e';
+  const sign = basis > 0 ? '+' : '';
+  const pctTxt = pct == null ? '' : `${sign}${pct.toFixed(2)}%`;
+  const absTxt = abs == null ? '' : `${sign}${abs.toFixed(2)}`;
+  return `<div style="background:${bg};color:#fff;border-radius:6px;padding:4px 8px;text-align:center;line-height:1.2">
+            <div style="font-weight:800;font-size:13px">${pctTxt}</div>
+            <div style="font-size:11px;opacity:.9">${absTxt}</div>
+          </div>`;
+}
+
+// שורת חוזה בסגנון ה-watchlist של Barchart, כולל שינוי יומי ושינוי מול תחילת החודש.
 function futuresRow(r) {
-  const up = r.pct != null ? r.pct > 0 : r.net != null ? r.net > 0 : false;
-  const flat = (r.pct ?? r.net ?? 0) === 0;
-  const bg = flat ? '#7a8699' : up ? '#0e7a4e' : '#b3261e';
-  const sign = (r.pct ?? 0) > 0 || (r.net ?? 0) > 0 ? '+' : '';
-  const pctTxt = r.pct == null ? '' : `${sign}${r.pct.toFixed(2)}%`;
-  const netTxt = r.net == null ? '' : `${sign}${r.net.toFixed(2)}`;
+  // שינוי מול תחילת החודש = מול הסגירה בתחילת החודש של אותו חוזה.
+  const mAbs = r.monthStart != null ? r.price - r.monthStart : null;
+  const mPct = r.monthStart ? (mAbs / r.monthStart) * 100 : null;
   return `
       <tr>
         <td style="padding:8px 10px;border-bottom:1px solid #eef2f7">
@@ -219,26 +256,23 @@ function futuresRow(r) {
           <span style="color:#5b6b7f;font-size:12px;margin-inline-start:8px">${r.label}</span>
         </td>
         <td style="padding:8px 10px;border-bottom:1px solid #eef2f7;text-align:center;font-weight:700;font-size:16px;color:#0e1c2e">${r.price.toFixed(2)}</td>
-        <td style="padding:6px 8px;border-bottom:1px solid #eef2f7;width:96px">
-          <div style="background:${bg};color:#fff;border-radius:6px;padding:4px 8px;text-align:center;line-height:1.2">
-            <div style="font-weight:800;font-size:13px">${pctTxt}</div>
-            <div style="font-size:11px;opacity:.9">${netTxt}</div>
-          </div>
-        </td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eef2f7;width:88px">${changeTag(r.pct, r.net)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eef2f7;width:88px">${changeTag(mPct, mAbs)}</td>
       </tr>`;
 }
 
 function futuresTable(title, rows) {
   const body = (rows && rows.length)
     ? rows.map(futuresRow).join('')
-    : '<tr><td colspan="3" style="padding:10px;color:#5b6b7f">לא זמין</td></tr>';
+    : '<tr><td colspan="4" style="padding:10px;color:#5b6b7f">לא זמין</td></tr>';
   return `
     <div style="font-weight:700;color:#123a86;margin:6px 0 6px">${title}</div>
     <table style="border-collapse:collapse;width:100%;background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
       <tr style="background:#f4f7fb">
         <td style="padding:6px 10px;color:#5b6b7f;font-size:12px">חוזה</td>
         <td style="padding:6px 10px;color:#5b6b7f;font-size:12px;text-align:center">מחיר</td>
-        <td style="padding:6px 10px;color:#5b6b7f;font-size:12px">שינוי יומי</td>
+        <td style="padding:6px 8px;color:#5b6b7f;font-size:12px;text-align:center">שינוי יומי</td>
+        <td style="padding:6px 8px;color:#5b6b7f;font-size:12px;text-align:center">מתחילת החודש</td>
       </tr>
       ${body}
     </table>`;
