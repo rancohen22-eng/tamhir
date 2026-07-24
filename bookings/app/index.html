@@ -153,7 +153,7 @@
    ========================================================================== */
 
 const API = 'https://ga86f4ac04ab998-arkiabkg.adb.il-jerusalem-1.oraclecloudapps.com/ords/arkia/api/';
-const BUILD = '2026-07-19.16';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
+const BUILD = '2026-07-19.17';   // חותמת גרסה — לאימות שהדפדפן טוען את הבנייה העדכנית
 
 async function api(path, params){
   // POST form-urlencoded = "simple request" → ללא CORS preflight.
@@ -210,6 +210,8 @@ const T = {
     emailLog:"לוג מיילים",emailLogNote:"מעקב קריאה מבוסס פיקסל — אינדיקציה בלבד. חלק מלקוחות המייל (Apple Mail, פרוקסי ארגוני) עלולים לסמן 'נקרא' מראש, ואחרים שחוסמים תמונות לא ירשמו קריאה כלל.",
     recipient:"נמען",kind:"סוג",sentAt:"נשלח",readQ:"נקרא?",readAt:"מתי נקרא",read:"נקראו",yes:"כן",no:"לא",
     emkAgentReq:"בקשה לסוכן",emkApprover:"אישור למאשר",emkWelcome:"מייל התחברות",emkReset:"איפוס סיסמה",emkStatus:"עדכון סטטוס",
+    accLocked:"החשבון ננעל זמנית עקב ריבוי ניסיונות כושלים. נסו שוב בעוד כ-15 דקות.",weakPw:"סיסמה קצרה מדי — נדרשים לפחות 8 תווים.",
+    loginAttempts:"ניסיונות התחברות",failed:"כשלונות",result:"תוצאה",lockNote:"נעילת חשבון אוטומטית לאחר 5 כשלונות ב-15 דקות. מנהל המערכת מקבל התראת מייל בעת נעילה.",
     del:"מחק",delUser:"מחיקת משתמש",confirmDel:"למחוק את המשתמש?",loginLog:"לוג כניסות",time:"זמן",cancelBooking:"בטל הזמנה",
     emailNotif:"התראות במייל",emailOn:"מקבל התראות במייל",emailOff:"התראות מייל כבויות",
     R_INITIATOR:"יוזם",R_APPROVER:"מאשר",R_AGENT:"סוכן",R_FINANCE:"פיננס",R_ADMIN:"מנהל מערכת",
@@ -246,6 +248,8 @@ const T = {
     emailLog:"Email log",emailLogNote:"Read tracking is pixel-based — indicative only. Some clients (Apple Mail, corporate proxies) may pre-mark 'read', and image-blocking clients never register a read.",
     recipient:"Recipient",kind:"Type",sentAt:"Sent",readQ:"Read?",readAt:"Read at",read:"read",yes:"Yes",no:"No",
     emkAgentReq:"Agent request",emkApprover:"Approver approval",emkWelcome:"Welcome email",emkReset:"Password reset",emkStatus:"Status update",
+    accLocked:"Account temporarily locked after too many failed attempts. Try again in ~15 minutes.",weakPw:"Password too short — at least 8 characters required.",
+    loginAttempts:"Login attempts",failed:"failed",result:"Result",lockNote:"Automatic lockout after 5 failures in 15 minutes. Admins are emailed on lockout.",
     delUser:"Delete user",confirmDel:"Delete this user?",loginLog:"Login log",time:"Time",cancelBooking:"Cancel booking",
     emailNotif:"Email notifications",emailOn:"Email notifications on",emailOff:"Email notifications off",
     R_INITIATOR:"Initiator",R_APPROVER:"Approver",R_AGENT:"Agent",R_FINANCE:"Finance",R_ADMIN:"Admin",
@@ -331,7 +335,11 @@ async function doLogin(){
   if(!u||!p){ document.getElementById('lockErr').textContent=t('required2'); return; }
   spin(true);
   const res=await api('login',{username:u,password:p});
-  if(!res.ok){ spin(false); document.getElementById('lockErr').textContent = res.error==='bad_credentials'?'שם משתמש או סיסמה שגויים / Invalid credentials':('שגיאה: '+res.error); return; }
+  if(!res.ok){ spin(false);
+    const msg = res.error==='bad_credentials' ? 'שם משתמש או סיסמה שגויים / Invalid credentials'
+              : res.error==='locked' ? t('accLocked')
+              : ('שגיאה: '+res.error);
+    document.getElementById('lockErr').textContent = msg; return; }
   SES={token:res.token,user:res.user,roles:res.roles||[],agent_id:res.agent_id};
   VIEW.lang=(res.user.pref_lang||'HE').toLowerCase();
   saveSession();
@@ -686,7 +694,7 @@ async function addUser(){
   const r=await api('admin/user/create',{token:SES.token,username:un,full:fn,email:document.getElementById('au_em').value.trim(),
     dept_id:document.getElementById('au_dept').value||'',role:document.getElementById('au_role').value,password:document.getElementById('au_pw').value.trim()});
   await refreshBoot(); spin(false);
-  if(!r.ok){ document.getElementById('au_err').textContent=r.error; return; }
+  if(!r.ok){ document.getElementById('au_err').textContent = r.error==='weak_password'?t('weakPw'):r.error; return; }
   const em=document.getElementById('au_em').value.trim();
   if(em){ alert(r.emailed ? t('welcomeSent')+' '+em : t('welcomeFailed')); }
   render();
@@ -744,12 +752,26 @@ async function renderLog(app){
   app.innerHTML=`<div class="card"><h2>${t('loginLog')}</h2><div class="muted">…</div></div>`;
   const r=await api('admin/logins',{token:SES.token});
   const list=r.ok?(r.logins||[]):[];
+  const ar=await api('admin/attempts',{token:SES.token});
+  const att=ar.ok?(ar.attempts||[]):[];
+  const fails=att.filter(a=>a.success!=='Y').length;
   app.innerHTML=`<div class="card"><h2>${t('loginLog')} <span class="muted" style="font-size:12px">(${list.length})</span></h2>
     <input id="lgSearch" class="fld" placeholder="${t('search')}" oninput="filterLg()">
     <div class="tablewrap" style="margin-top:8px"><table id="lgTable"><thead><tr>
       <th>username</th><th>${t('name')}</th><th>${t('time')}</th></tr></thead>
-    <tbody>${list.map(l=>`<tr><td dir="ltr">${esc(l.username)}</td><td>${esc(l.full_name||t('none'))}</td><td dir="ltr">${esc(l.at)}</td></tr>`).join('')||`<tr><td colspan="3" class="muted">${t('none')}</td></tr>`}</tbody></table></div></div>`;
+    <tbody>${list.map(l=>`<tr><td dir="ltr">${esc(l.username)}</td><td>${esc(l.full_name||t('none'))}</td><td dir="ltr">${esc(l.at)}</td></tr>`).join('')||`<tr><td colspan="3" class="muted">${t('none')}</td></tr>`}</tbody></table></div></div>
+  <div class="card"><h2>${t('loginAttempts')} <span class="muted" style="font-size:12px">(${t('failed')}: ${fails})</span></h2>
+    <p class="muted" style="font-size:12px;margin:0 0 8px">${t('lockNote')}</p>
+    <input id="atSearch" class="fld" placeholder="${t('search')}" oninput="filterAt()">
+    <div class="tablewrap" style="margin-top:8px"><table id="atTable"><thead><tr>
+      <th>username</th><th>IP</th><th>${t('result')}</th><th>${t('time')}</th></tr></thead>
+    <tbody>${att.map(a=>`<tr>
+      <td dir="ltr">${esc(a.username||'')}</td><td dir="ltr">${esc(a.ip||'—')}</td>
+      <td>${a.success==='Y'?`<span class="pill" style="background:var(--accent);color:#fff">✓</span>`:`<span class="pill" style="background:var(--danger);color:#fff">✗</span>`}</td>
+      <td dir="ltr">${esc(a.at)}</td></tr>`).join('')||`<tr><td colspan="4" class="muted">${t('none')}</td></tr>`}</tbody></table></div></div>`;
 }
+function filterAt(){ const q=document.getElementById('atSearch').value.toLowerCase();
+  document.querySelectorAll('#atTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
 function filterLg(){ const q=document.getElementById('lgSearch').value.toLowerCase();
   document.querySelectorAll('#lgTable tbody tr').forEach(tr=>{tr.style.display=tr.textContent.toLowerCase().includes(q)?'':'none';}); }
 
