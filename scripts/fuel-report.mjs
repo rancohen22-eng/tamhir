@@ -3,15 +3,16 @@
  * fuel-report.mjs — בונה דוח מחירי דלק יומי (Brent & WTI) ושומר אותו כ-HTML למייל.
  *
  * מקורות נתונים (כולם חינמיים):
- *   • EIA API v2 — מחיר ספוט יומי + היסטוריה (להשוואות) + תחזית STEO רשמית.
- *   • Yahoo Finance (chart, ללא מפתח) — עקום חוזים עתידיים (futures) כ"מחיר שוק חי" וצפי שוק.
+ *   • EIA API v2      — מחיר ספוט יומי + היסטוריה (להשוואות) + תחזית STEO רשמית.
+ *   • Barchart OnDemand (getQuote) — עקום החוזים העתידיים לפי חודש (CBU26, CLQ26 ...),
+ *                        בדיוק כמו ב-watchlist של Barchart: מחיר, שינוי יומי מוחלט ו-%.
  *
  * פלט:
  *   out/email.html   — גוף המייל (עברית, RTL).
  *   out/subject.txt  — שורת הנושא.
  *
  * הרצה מקומית:
- *   EIA_API_KEY=xxxxx node scripts/fuel-report.mjs
+ *   EIA_API_KEY=xxx BARCHART_API_KEY=yyy node scripts/fuel-report.mjs
  *
  * הסקריפט משתמש רק ב-fetch המובנה של Node 20+ — ללא תלויות npm.
  * אם מקור נתונים כלשהו נכשל, הדוח עדיין נבנה עם מה שכן זמין (best-effort).
@@ -25,6 +26,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = join(__dirname, '..', 'out');
 
 const EIA_API_KEY = process.env.EIA_API_KEY;
+const BARCHART_API_KEY = process.env.BARCHART_API_KEY;
+
+// כמה חוזים חודשיים קרובים להציג לכל דלק בעקום.
+const FUTURES_MONTHS = 6;
 
 // ── סדרות EIA ──────────────────────────────────────────────────────────────
 // ספוט יומי: RWTC = WTI Cushing, RBRTE = Europe Brent.
@@ -32,10 +37,12 @@ const EIA_SPOT = { WTI: 'RWTC', BRENT: 'RBRTE' };
 // תחזית STEO חודשית: WTIPUUS = WTI spot forecast, BREPUUS = Brent spot forecast.
 const STEO_SERIES = { WTI: 'WTIPUUS', BRENT: 'BREPUUS' };
 
-// חוזי futures ב-Yahoo: front-month רציף.
-const YF_FRONT = { WTI: 'CL=F', BRENT: 'BZ=F' };
-// קודי חודש של חוזים עתידיים (F=ינואר ... Z=דצמבר) לבניית סמלי חוזים קדימה.
+// שורשי חוזים ב-Barchart: Brent = CB, WTI = CL.
+const FUT_ROOT = { BRENT: 'CB', WTI: 'CL' };
+// קודי חודש של חוזים עתידיים (F=ינואר ... Z=דצמבר).
 const MONTH_CODES = ['F', 'G', 'H', 'J', 'K', 'M', 'N', 'Q', 'U', 'V', 'X', 'Z'];
+const HE_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
+  'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
 // ── עזרי HTTP ──────────────────────────────────────────────────────────────
 async function getJson(url, { headers } = {}) {
@@ -69,7 +76,6 @@ async function fetchEiaSpot() {
     if (!key || r.value == null) continue;
     out[key].push({ period: r.period, value: Number(r.value) });
   }
-  // ודא מיון יורד לפי תאריך.
   for (const k of Object.keys(out)) out[k].sort((a, b) => (a.period < b.period ? 1 : -1));
   return out;
 }
@@ -96,62 +102,70 @@ async function fetchSteoForecast() {
   for (const r of rows) {
     const key = r.seriesId === STEO_SERIES.WTI ? 'WTI' : r.seriesId === STEO_SERIES.BRENT ? 'BRENT' : null;
     if (!key || r.value == null) continue;
-    if (r.period < nowMonth) continue; // רק חודשים נוכחיים/עתידיים = תחזית
+    if (r.period < nowMonth) continue;
     out[key].push({ period: r.period, value: Number(r.value) });
   }
-  for (const k of Object.keys(out)) out[k] = out[k].slice(0, 3); // 3 החודשים הקרובים
+  for (const k of Object.keys(out)) out[k] = out[k].slice(0, 3);
   return out;
 }
 
-// ── Yahoo: עקום חוזים עתידיים (best-effort) ────────────────────────────────
-async function fetchYahooLast(symbol) {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}`;
-  const json = await getJson(url);
-  const result = json?.chart?.result?.[0];
-  const price = result?.meta?.regularMarketPrice;
-  return price == null ? null : Number(price);
-}
-
-// בונה סמלי חוזים ל-N החודשים הקרובים (root: 'CL' ל-WTI, 'BZ' ל-Brent).
-function futuresSymbols(root, count) {
-  const syms = [];
+// ── Barchart: עקום חוזים עתידיים לפי חודש ───────────────────────────────────
+// בונה סמלי חוזים ל-N החודשים הקרובים לשורש נתון (מהחודש הנוכחי קדימה).
+function genContracts(root, n) {
+  const list = [];
   const d = new Date();
   d.setDate(1);
-  d.setMonth(d.getMonth() + 1); // מתחילים מהחודש הקרוב
-  for (let i = 0; i < count; i++) {
-    const code = MONTH_CODES[d.getMonth()];
+  for (let i = 0; i < n; i++) {
+    const m = d.getMonth();
     const yy = String(d.getFullYear()).slice(2);
-    syms.push({ symbol: `${root}${code}${yy}.NYM`, period: d.toISOString().slice(0, 7) });
+    list.push({
+      symbol: `${root}${MONTH_CODES[m]}${yy}`,
+      label: `${HE_MONTHS[m]} ${d.getFullYear()}`,
+      period: `${d.getFullYear()}-${String(m + 1).padStart(2, '0')}`,
+    });
     d.setMonth(d.getMonth() + 1);
   }
-  return syms;
+  return list;
 }
 
-async function fetchFutures() {
-  const out = { WTI: { front: null, curve: [] }, BRENT: { front: null, curve: [] } };
-  const roots = { WTI: 'CL', BRENT: 'BZ' };
-  for (const fuel of Object.keys(YF_FRONT)) {
-    try {
-      out[fuel].front = await fetchYahooLast(YF_FRONT[fuel]);
-    } catch { /* best-effort */ }
-    for (const { symbol, period } of futuresSymbols(roots[fuel], 3)) {
-      try {
-        const v = await fetchYahooLast(symbol);
-        if (v != null) out[fuel].curve.push({ period, value: v });
-      } catch { /* best-effort */ }
+// מחזיר { BRENT: [{symbol,label,price,net,pct}], WTI: [...] }
+async function fetchBarchartFutures() {
+  if (!BARCHART_API_KEY) throw new Error('BARCHART_API_KEY חסר');
+  const meta = {};   // symbol -> {label, period, fuel}
+  const symbols = [];
+  for (const fuel of Object.keys(FUT_ROOT)) {
+    for (const c of genContracts(FUT_ROOT[fuel], FUTURES_MONTHS)) {
+      meta[c.symbol] = { label: c.label, period: c.period, fuel };
+      symbols.push(c.symbol);
     }
   }
+  const params = new URLSearchParams({ apikey: BARCHART_API_KEY, symbols: symbols.join(',') });
+  const url = `https://ondemand.websol.barchart.com/getQuote.json?${params}`;
+  const json = await getJson(url);
+  const results = json?.results ?? [];
+  const out = { BRENT: [], WTI: [] };
+  for (const r of results) {
+    const m = meta[r.symbol];
+    if (!m || r.lastPrice == null) continue;
+    out[m.fuel].push({
+      symbol: r.symbol,
+      label: m.label,
+      period: m.period,
+      price: Number(r.lastPrice),
+      net: r.netChange == null ? null : Number(r.netChange),
+      pct: r.percentChange == null ? null : Number(String(r.percentChange).replace('%', '')),
+    });
+  }
+  for (const k of Object.keys(out)) out[k].sort((a, b) => (a.period < b.period ? -1 : 1));
   return out;
 }
 
-// ── חישוב השוואות ──────────────────────────────────────────────────────────
-// series ממוין יורד (חדש→ישן). מחזיר את הערכים הרלוונטיים להשוואה.
+// ── חישוב השוואות ספוט ──────────────────────────────────────────────────────
 function analyze(series) {
   if (!series || series.length === 0) return null;
   const current = series[0];
   const prev = series[1] ?? null;
   const curMonth = current.period.slice(0, 7);
-  // הערך המוקדם ביותר בתוך החודש הנוכחי = "תחילת החודש".
   let monthStart = null;
   for (let i = series.length - 1; i >= 0; i--) {
     if (series[i].period.slice(0, 7) === curMonth) { monthStart = series[i]; break; }
@@ -190,75 +204,102 @@ function deltaCell(d) {
   return `<td style="color:${color};white-space:nowrap;font-weight:600">${arrow} ${sign}${d.abs.toFixed(2)}${pct}</td>`;
 }
 
-function fuelBlock(label, spot, fut, steo) {
+// שורת חוזה בסגנון ה-watchlist של Barchart.
+function futuresRow(r) {
+  const up = r.pct != null ? r.pct > 0 : r.net != null ? r.net > 0 : false;
+  const flat = (r.pct ?? r.net ?? 0) === 0;
+  const bg = flat ? '#7a8699' : up ? '#0e7a4e' : '#b3261e';
+  const sign = (r.pct ?? 0) > 0 || (r.net ?? 0) > 0 ? '+' : '';
+  const pctTxt = r.pct == null ? '' : `${sign}${r.pct.toFixed(2)}%`;
+  const netTxt = r.net == null ? '' : `${sign}${r.net.toFixed(2)}`;
+  return `
+      <tr>
+        <td style="padding:8px 10px;border-bottom:1px solid #eef2f7">
+          <span style="font-weight:800;font-size:16px;color:#0e1c2e">${r.symbol}</span>
+          <span style="color:#5b6b7f;font-size:12px;margin-inline-start:8px">${r.label}</span>
+        </td>
+        <td style="padding:8px 10px;border-bottom:1px solid #eef2f7;text-align:center;font-weight:700;font-size:16px;color:#0e1c2e">${r.price.toFixed(2)}</td>
+        <td style="padding:6px 8px;border-bottom:1px solid #eef2f7;width:96px">
+          <div style="background:${bg};color:#fff;border-radius:6px;padding:4px 8px;text-align:center;line-height:1.2">
+            <div style="font-weight:800;font-size:13px">${pctTxt}</div>
+            <div style="font-size:11px;opacity:.9">${netTxt}</div>
+          </div>
+        </td>
+      </tr>`;
+}
+
+function futuresTable(title, rows) {
+  const body = (rows && rows.length)
+    ? rows.map(futuresRow).join('')
+    : '<tr><td colspan="3" style="padding:10px;color:#5b6b7f">לא זמין</td></tr>';
+  return `
+    <div style="font-weight:700;color:#123a86;margin:6px 0 6px">${title}</div>
+    <table style="border-collapse:collapse;width:100%;background:#fff;border:1px solid #e2e8f0;border-radius:10px;overflow:hidden">
+      <tr style="background:#f4f7fb">
+        <td style="padding:6px 10px;color:#5b6b7f;font-size:12px">חוזה</td>
+        <td style="padding:6px 10px;color:#5b6b7f;font-size:12px;text-align:center">מחיר</td>
+        <td style="padding:6px 10px;color:#5b6b7f;font-size:12px">שינוי יומי</td>
+      </tr>
+      ${body}
+    </table>`;
+}
+
+function spotBlock(label, spot, steo) {
   const a = analyze(spot);
   const cur = a?.current?.value ?? null;
   const dPrev = a ? delta(cur, a.prev?.value ?? null) : null;
   const dMonth = a ? delta(cur, a.monthStart?.value ?? null) : null;
-
   const spotDate = a?.current ? heDate(a.current.period) : '—';
-  const front = fut?.front != null ? fmt(fut.front) : '—';
-
   const steoRows = (steo ?? [])
     .map((p) => `<span style="display:inline-block;margin-inline-end:14px">${heMonth(p.period)}: <b>${fmt(p.value)}</b></span>`)
     .join('') || '<span style="color:#5b6b7f">לא זמין</span>';
-
-  const curveRows = (fut?.curve ?? [])
-    .map((p) => `<span style="display:inline-block;margin-inline-end:14px">${heMonth(p.period)}: <b>${fmt(p.value)}</b></span>`)
-    .join('') || '<span style="color:#5b6b7f">לא זמין</span>';
-
   return `
-  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;margin-bottom:16px">
+  <div style="background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;margin-bottom:14px">
     <div style="font-size:18px;font-weight:800;color:#123a86;margin-bottom:10px">${label}</div>
     <table style="border-collapse:collapse;width:100%;font-size:15px">
       <tr>
-        <td style="color:#5b6b7f;padding:6px 0;width:42%">מחיר נוכחי (ספוט רשמי, ${spotDate})</td>
+        <td style="color:#5b6b7f;padding:6px 0;width:46%">מחיר נוכחי (ספוט רשמי, ${spotDate})</td>
         <td style="font-size:20px;font-weight:800;color:#0e1c2e">${fmt(cur)}</td>
       </tr>
-      <tr>
-        <td style="color:#5b6b7f;padding:6px 0">שינוי מול יום קודם</td>
-        ${deltaCell(dPrev)}
-      </tr>
-      <tr>
-        <td style="color:#5b6b7f;padding:6px 0">שינוי מול תחילת החודש</td>
-        ${deltaCell(dMonth)}
-      </tr>
-      <tr>
-        <td style="color:#5b6b7f;padding:6px 0">מחיר שוק חי (חוזה קרוב)</td>
-        <td style="font-weight:600">${front}</td>
-      </tr>
+      <tr><td style="color:#5b6b7f;padding:6px 0">שינוי מול יום קודם</td>${deltaCell(dPrev)}</tr>
+      <tr><td style="color:#5b6b7f;padding:6px 0">שינוי מול תחילת החודש</td>${deltaCell(dMonth)}</tr>
     </table>
     <div style="margin-top:12px;padding-top:10px;border-top:1px dashed #e2e8f0">
       <div style="color:#5b6b7f;font-size:13px;margin-bottom:4px">תחזית רשמית (EIA STEO)</div>
       <div style="font-size:15px">${steoRows}</div>
     </div>
-    <div style="margin-top:8px">
-      <div style="color:#5b6b7f;font-size:13px;margin-bottom:4px">עקום חוזים עתידיים (ציפיות שוק)</div>
-      <div style="font-size:15px">${curveRows}</div>
-    </div>
   </div>`;
 }
 
 function renderHtml({ spot, forecast, futures, generatedAt, notes }) {
-  const brent = fuelBlock('Brent (נפט ים הצפון)', spot?.BRENT, futures?.BRENT, forecast?.BRENT);
-  const wti = fuelBlock('WTI (נפט אמריקאי)', spot?.WTI, futures?.WTI, forecast?.WTI);
+  const brentSpot = spotBlock('Brent — נפט ים הצפון', spot?.BRENT, forecast?.BRENT);
+  const wtiSpot = spotBlock('WTI — נפט אמריקאי', spot?.WTI, forecast?.WTI);
   const noteHtml = notes.length
     ? `<div style="margin-top:14px;color:#b3261e;font-size:13px">${notes.map((n) => `⚠ ${n}`).join('<br>')}</div>`
     : '';
   return `<!DOCTYPE html>
 <html lang="he" dir="rtl"><head><meta charset="utf-8"></head>
 <body style="margin:0;padding:0;background:#f2f5f9">
-  <div style="max-width:640px;margin:0 auto;padding:20px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:#0e1c2e">
+  <div style="max-width:660px;margin:0 auto;padding:20px;font-family:-apple-system,'Segoe UI',Roboto,Arial,sans-serif;color:#0e1c2e">
     <div style="background:#123a86;color:#fff;border-radius:12px;padding:18px 20px;margin-bottom:18px">
       <div style="font-size:22px;font-weight:800">דוח מחירי דלק יומי</div>
       <div style="font-size:14px;opacity:.9;margin-top:4px">Brent &amp; WTI · ${heDate(generatedAt)}</div>
     </div>
-    ${brent}
-    ${wti}
+
+    <div style="font-size:16px;font-weight:800;color:#0e1c2e;margin:4px 0 10px">מחיר נוכחי, השוואות ותחזית רשמית</div>
+    ${brentSpot}
+    ${wtiSpot}
+
+    <div style="font-size:16px;font-weight:800;color:#0e1c2e;margin:20px 0 8px">חוזים עתידיים (מחיר צפוי לפי השוק)</div>
+    ${futuresTable('Brent — חוזים עתידיים', futures?.BRENT)}
+    <div style="height:14px"></div>
+    ${futuresTable('WTI — חוזים עתידיים', futures?.WTI)}
+
     ${noteHtml}
     <div style="margin-top:18px;color:#5b6b7f;font-size:12px;line-height:1.6">
-      מקורות: מחיר ספוט ותחזית — U.S. EIA (רשמי); חוזים עתידיים — Yahoo Finance.<br>
-      הערה: מחיר הספוט הרשמי של EIA מתעדכן עם עיכוב של מספר ימי מסחר; "מחיר שוק חי" משקף את החוזה הקרוב במסחר.<br>
+      מקורות: מחיר ספוט ותחזית — U.S. EIA (רשמי); חוזים עתידיים — Barchart.<br>
+      הערה: מחיר הספוט הרשמי של EIA מתעדכן עם עיכוב של מספר ימי מסחר; החוזים העתידיים משקפים
+      את ציפיות השוק בזמן אמת.<br>
       דוח אוטומטי — אינו מהווה ייעוץ או המלצה.
     </div>
   </div>
@@ -285,28 +326,17 @@ async function main() {
   const notes = [];
 
   let spot = null;
-  try {
-    spot = await fetchEiaSpot();
-  } catch (e) {
-    notes.push(`טעינת מחירי ספוט מ-EIA נכשלה: ${e.message}`);
-  }
+  try { spot = await fetchEiaSpot(); }
+  catch (e) { notes.push(`טעינת מחירי ספוט מ-EIA נכשלה: ${e.message}`); }
 
   let forecast = null;
-  try {
-    forecast = await fetchSteoForecast();
-  } catch (e) {
-    notes.push(`טעינת תחזית STEO נכשלה: ${e.message}`);
-  }
+  try { forecast = await fetchSteoForecast(); }
+  catch (e) { notes.push(`טעינת תחזית STEO נכשלה: ${e.message}`); }
 
   let futures = null;
-  try {
-    futures = await fetchFutures();
-  } catch (e) {
-    notes.push(`טעינת חוזים עתידיים נכשלה: ${e.message}`);
-  }
+  try { futures = await fetchBarchartFutures(); }
+  catch (e) { notes.push(`טעינת חוזים עתידיים (Barchart) נכשלה: ${e.message}`); }
 
-  // אם אין בכלל נתוני ספוט — עדיין נפיק מייל עם ההערות, אבל נצא בקוד שגיאה כדי
-  // שה-workflow יסמן כשל וניתן לחקור. (המייל עדיין נשלח בשלב הבא של ה-Action.)
   const html = renderHtml({ spot, forecast, futures, generatedAt, notes });
   const subject = renderSubject({ spot, generatedAt });
 
@@ -318,14 +348,15 @@ async function main() {
   console.log('נושא:', subject);
   if (notes.length) {
     console.warn('אזהרות:\n - ' + notes.join('\n - '));
-    if (!spot || (!spot.WTI.length && !spot.BRENT.length)) {
-      process.exitCode = 1; // כשל אמיתי — אין נתוני מחיר כלל
-    }
+    const noSpot = !spot || (!spot.WTI.length && !spot.BRENT.length);
+    const noFut = !futures || (!futures.BRENT.length && !futures.WTI.length);
+    if (noSpot && noFut) process.exitCode = 1; // אין נתונים כלל
   }
 }
 
 // ── ייצוא לצורכי בדיקה + הרצה ישירה בלבד ────────────────────────────────────
-export { analyze, delta, renderHtml, renderSubject, fetchEiaSpot, fetchSteoForecast, fetchFutures };
+export { analyze, delta, renderHtml, renderSubject, genContracts,
+  fetchEiaSpot, fetchSteoForecast, fetchBarchartFutures };
 
 const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isDirectRun) {
