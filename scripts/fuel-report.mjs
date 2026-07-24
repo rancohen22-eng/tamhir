@@ -39,6 +39,8 @@ const STEO_SERIES = { WTI: 'WTIPUUS', BRENT: 'BREPUUS' };
 
 // שורשי חוזים ב-Barchart: Brent = CB, WTI = CL.
 const FUT_ROOT = { BRENT: 'CB', WTI: 'CL' };
+// שורשי חוזים ב-Yahoo (גיבוי): Brent = BZ, WTI = CL (סיומת .NYM).
+const YF_ROOT = { BRENT: 'BZ', WTI: 'CL' };
 // קודי חודש של חוזים עתידיים (F=ינואר ... Z=דצמבר).
 const MONTH_CODES = ['F', 'G', 'H', 'J', 'K', 'M', 'N', 'Q', 'U', 'V', 'X', 'Z'];
 const HE_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי', 'יוני',
@@ -183,6 +185,57 @@ async function fetchContractsMonthStart(symbols) {
     } catch { /* best-effort per contract */ }
   }));
   return out;
+}
+
+// ── Yahoo Finance: גיבוי לעקום החוזים (ללא מפתח) ────────────────────────────
+// שיחה אחת לכל חוזה: מחזירה מחיר נוכחי, סגירה קודמת (לשינוי יומי) וסגירת תחילת החודש.
+async function fetchYahooContract(symbol) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=3mo&interval=1d`;
+  const json = await getJson(url);
+  const res = json?.chart?.result?.[0];
+  if (!res) return null;
+  const price = res.meta?.regularMarketPrice ?? null;
+  const prevClose = res.meta?.chartPreviousClose ?? res.meta?.previousClose ?? null;
+  const ts = res.timestamp ?? [];
+  const closes = res.indicators?.quote?.[0]?.close ?? [];
+  const nowMonth = new Date().toISOString().slice(0, 7);
+  let monthStart = null;
+  for (let i = 0; i < ts.length; i++) {
+    if (closes[i] == null) continue;
+    const ym = new Date(ts[i] * 1000).toISOString().slice(0, 7);
+    if (ym === nowMonth) { monthStart = Number(closes[i]); break; }
+  }
+  return { price, prevClose, monthStart };
+}
+
+async function fetchYahooFutures() {
+  const out = { BRENT: [], WTI: [] };
+  for (const fuel of Object.keys(YF_ROOT)) {
+    for (const c of genContracts(YF_ROOT[fuel], FUTURES_MONTHS)) {
+      try {
+        const q = await fetchYahooContract(`${c.symbol}.NYM`);
+        if (!q || q.price == null) continue;
+        const net = q.prevClose != null ? q.price - q.prevClose : null;
+        const pct = q.prevClose ? (net / q.prevClose) * 100 : null;
+        out[fuel].push({
+          symbol: c.symbol, label: c.label, period: c.period,
+          price: Number(q.price), net, pct, monthStart: q.monthStart ?? null,
+        });
+      } catch { /* best-effort per contract */ }
+    }
+    out[fuel].sort((a, b) => (a.period < b.period ? -1 : 1));
+  }
+  if (!out.BRENT.length && !out.WTI.length) throw new Error('Yahoo לא החזיר חוזים');
+  return out;
+}
+
+// בוחר מקור לחוזים: Barchart אם קיים מפתח (עם נפילה ל-Yahoo בכשל), אחרת Yahoo.
+async function fetchFutures() {
+  if (BARCHART_API_KEY) {
+    try { return await fetchBarchartFutures(); }
+    catch { /* נפילה חיננית ל-Yahoo */ }
+  }
+  return fetchYahooFutures();
 }
 
 // ── חישוב השוואות ספוט ──────────────────────────────────────────────────────
@@ -331,7 +384,7 @@ function renderHtml({ spot, forecast, futures, generatedAt, notes }) {
 
     ${noteHtml}
     <div style="margin-top:18px;color:#5b6b7f;font-size:12px;line-height:1.6">
-      מקורות: מחיר ספוט ותחזית — U.S. EIA (רשמי); חוזים עתידיים — Barchart.<br>
+      מקורות: מחיר ספוט ותחזית — U.S. EIA (רשמי); חוזים עתידיים — Barchart (או Yahoo כגיבוי).<br>
       הערה: מחיר הספוט הרשמי של EIA מתעדכן עם עיכוב של מספר ימי מסחר; החוזים העתידיים משקפים
       את ציפיות השוק בזמן אמת.<br>
       דוח אוטומטי — אינו מהווה ייעוץ או המלצה.
@@ -368,8 +421,8 @@ async function main() {
   catch (e) { notes.push(`טעינת תחזית STEO נכשלה: ${e.message}`); }
 
   let futures = null;
-  try { futures = await fetchBarchartFutures(); }
-  catch (e) { notes.push(`טעינת חוזים עתידיים (Barchart) נכשלה: ${e.message}`); }
+  try { futures = await fetchFutures(); }
+  catch (e) { notes.push(`טעינת חוזים עתידיים נכשלה: ${e.message}`); }
 
   const html = renderHtml({ spot, forecast, futures, generatedAt, notes });
   const subject = renderSubject({ spot, generatedAt });
@@ -390,7 +443,7 @@ async function main() {
 
 // ── ייצוא לצורכי בדיקה + הרצה ישירה בלבד ────────────────────────────────────
 export { analyze, delta, renderHtml, renderSubject, genContracts,
-  fetchEiaSpot, fetchSteoForecast, fetchBarchartFutures };
+  fetchEiaSpot, fetchSteoForecast, fetchBarchartFutures, fetchYahooFutures, fetchFutures };
 
 const isDirectRun = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
 if (isDirectRun) {
