@@ -6,6 +6,11 @@ on:
     # שים לב: ה-cron של GitHub פועל ב-UTC וללא מעבר שעון קיץ/חורף.
     - cron: '0 5 * * *'
   workflow_dispatch: {}   # מאפשר הרצה ידנית לבדיקה מלשונית Actions
+  push:
+    branches: [main]
+    paths:                # ריצת "בנייה בלבד" לאימות אחרי שינוי קוד (ללא שליחת מייל)
+      - 'scripts/fuel-report.mjs'
+      - '.github/workflows/daily-fuel-email.yml'
 
 # מונע ריצות חופפות אם הרצה ידנית מתנגשת עם המתוזמנת
 concurrency:
@@ -27,9 +32,12 @@ jobs:
       - name: Build fuel report
         env:
           EIA_API_KEY: ${{ secrets.EIA_API_KEY }}
+          BARCHART_API_KEY: ${{ secrets.BARCHART_API_KEY }}
         run: node scripts/fuel-report.mjs
 
+      # שליחת מייל רק בריצה מתוזמנת או ידנית — לא בריצת push (שהיא בנייה/אימות בלבד).
       - name: Send email
+        if: github.event_name != 'push'
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: smtp.gmail.com
