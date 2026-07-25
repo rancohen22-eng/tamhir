@@ -49,16 +49,38 @@ const HE_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי
 // ── עזרי HTTP ──────────────────────────────────────────────────────────────
 // User-Agent של דפדפן רגיל (ללא המילה "bot") — ה-WAF של EIA (Akamai) חוסם UA חשודים ומחזיר 403.
 const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
-async function getJson(url, { headers } = {}) {
-  const res = await fetch(url, {
-    headers: { 'User-Agent': UA, Accept: 'application/json,text/plain,*/*', ...headers },
-  });
-  if (!res.ok) {
-    let body = '';
-    try { body = (await res.text()).replace(/\s+/g, ' ').slice(0, 200); } catch { /* ignore */ }
-    throw new Error(`HTTP ${res.status} for ${url.split('?')[0]}${body ? ` — ${body}` : ''}`);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function getJson(url, { headers, retries = 2 } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': UA, Accept: 'application/json,text/plain,*/*', ...headers },
+      });
+      if (!res.ok) {
+        let body = '';
+        try { body = (await res.text()).replace(/\s+/g, ' ').slice(0, 200); } catch { /* ignore */ }
+        const err = new Error(`HTTP ${res.status} for ${url.split('?')[0]}${body ? ` — ${body}` : ''}`);
+        // 429/5xx = תקלה זמנית → כדאי לנסות שוב; שאר השגיאות (למשל 403 מפתח) — לא.
+        if ((res.status === 429 || res.status >= 500) && attempt < retries) {
+          await sleep(500 * (attempt + 1));
+          lastErr = err;
+          continue;
+        }
+        throw err;
+      }
+      return await res.json();
+    } catch (e) {
+      lastErr = e;
+      if (attempt < retries && (e.name === 'TypeError' || /fetch failed|network/i.test(e.message))) {
+        await sleep(500 * (attempt + 1));
+        continue;
+      }
+      throw e;
+    }
   }
-  return res.json();
+  throw lastErr;
 }
 
 // ── EIA: ספוט + היסטוריה ───────────────────────────────────────────────────
@@ -440,10 +462,9 @@ async function main() {
   console.log('נוצר out/email.html ו-out/subject.txt');
   console.log('נושא:', subject);
   if (notes.length) {
-    console.warn('אזהרות:\n - ' + notes.join('\n - '));
-    const noSpot = !spot || (!spot.WTI.length && !spot.BRENT.length);
-    const noFut = !futures || (!futures.BRENT.length && !futures.WTI.length);
-    if (noSpot && noFut) process.exitCode = 1; // אין נתונים כלל
+    // מדפיסים אזהרות ללוג אך *לא* מכשילים את הריצה — עדיף לשלוח מייל חלקי (עם הערות)
+    // מאשר לא לשלוח כלום בגלל תקלה זמנית של מקור נתונים.
+    console.warn('אזהרות (המייל עדיין נשלח):\n - ' + notes.join('\n - '));
   }
 }
 
