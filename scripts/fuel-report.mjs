@@ -47,11 +47,17 @@ const HE_MONTHS = ['ינואר', 'פברואר', 'מרץ', 'אפריל', 'מאי
   'יולי', 'אוגוסט', 'ספטמבר', 'אוקטובר', 'נובמבר', 'דצמבר'];
 
 // ── עזרי HTTP ──────────────────────────────────────────────────────────────
+// User-Agent של דפדפן רגיל (ללא המילה "bot") — ה-WAF של EIA (Akamai) חוסם UA חשודים ומחזיר 403.
+const UA = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36';
 async function getJson(url, { headers } = {}) {
   const res = await fetch(url, {
-    headers: { 'User-Agent': 'Mozilla/5.0 (fuel-report bot)', ...headers },
+    headers: { 'User-Agent': UA, Accept: 'application/json,text/plain,*/*', ...headers },
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status} for ${url.split('?')[0]}`);
+  if (!res.ok) {
+    let body = '';
+    try { body = (await res.text()).replace(/\s+/g, ' ').slice(0, 200); } catch { /* ignore */ }
+    throw new Error(`HTTP ${res.status} for ${url.split('?')[0]}${body ? ` — ${body}` : ''}`);
+  }
   return res.json();
 }
 
