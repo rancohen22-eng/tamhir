@@ -120,9 +120,11 @@ async function fetchSteoForecast() {
     api_key: EIA_API_KEY,
     frequency: 'monthly',
     'data[0]': 'value',
+    // ממיינים *יורד* כדי לקבל את החודשים האחרונים (תקופת התחזית). מיון עולה היה
+    // מחזיר את הנתונים הכי ישנים (משנות ה-90) — כולם לפני החודש הנוכחי, ומסוננים החוצה.
     'sort[0][column]': 'period',
-    'sort[0][direction]': 'asc',
-    length: '48',
+    'sort[0][direction]': 'desc',
+    length: '36',
   });
   params.append('facets[seriesId][]', STEO_SERIES.WTI);
   params.append('facets[seriesId][]', STEO_SERIES.BRENT);
@@ -134,10 +136,14 @@ async function fetchSteoForecast() {
   for (const r of rows) {
     const key = r.seriesId === STEO_SERIES.WTI ? 'WTI' : r.seriesId === STEO_SERIES.BRENT ? 'BRENT' : null;
     if (!key || r.value == null) continue;
-    if (r.period < nowMonth) continue;
+    if (r.period < nowMonth) continue; // רק חודשים נוכחיים/עתידיים = תחזית
     out[key].push({ period: r.period, value: Number(r.value) });
   }
-  for (const k of Object.keys(out)) out[k] = out[k].slice(0, 3);
+  // ממיינים עולה לתצוגה ולוקחים את 3 החודשים הקרובים.
+  for (const k of Object.keys(out)) {
+    out[k].sort((a, b) => (a.period < b.period ? -1 : 1));
+    out[k] = out[k].slice(0, 3);
+  }
   return out;
 }
 
