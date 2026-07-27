@@ -381,7 +381,7 @@ function spotBlock(label, spot, steo) {
     <div style="font-size:18px;font-weight:800;color:#123a86;margin-bottom:10px">${label}</div>
     <table style="border-collapse:collapse;width:100%;font-size:15px">
       <tr>
-        <td style="color:#5b6b7f;padding:6px 0;width:46%">מחיר נוכחי (ספוט רשמי, ${spotDate})</td>
+        <td style="color:#5b6b7f;padding:6px 0;width:46%">מחיר ספוט רשמי אחרון (EIA, ${spotDate})</td>
         <td style="font-size:20px;font-weight:800;color:#0e1c2e">${fmt(cur)}</td>
       </tr>
       <tr><td style="color:#5b6b7f;padding:6px 0">שינוי מול יום קודם</td>${deltaCell(dPrev)}</tr>
@@ -469,6 +469,11 @@ async function main() {
 
   console.log('נוצר out/email.html ו-out/subject.txt');
   console.log('נושא:', subject);
+  console.log('סטטוס נתונים:', JSON.stringify({
+    spot: { BRENT: spot?.BRENT?.length ?? 0, WTI: spot?.WTI?.length ?? 0 },
+    steo: { BRENT: forecast?.BRENT?.length ?? 0, WTI: forecast?.WTI?.length ?? 0 },
+    futures: { BRENT: futures?.BRENT?.length ?? 0, WTI: futures?.WTI?.length ?? 0 },
+  }));
   if (notes.length) {
     // מדפיסים אזהרות ללוג אך *לא* מכשילים את הריצה — עדיף לשלוח מייל חלקי (עם הערות)
     // מאשר לא לשלוח כלום בגלל תקלה זמנית של מקור נתונים.
