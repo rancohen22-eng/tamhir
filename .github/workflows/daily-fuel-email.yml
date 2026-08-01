@@ -1,16 +1,10 @@
 name: Daily Fuel Price Email
 
 on:
-  schedule:
-    # 05:00 UTC ≈ 08:00 שעון ישראל בקיץ / 07:00 בחורף.
-    # שים לב: ה-cron של GitHub פועל ב-UTC וללא מעבר שעון קיץ/חורף.
-    - cron: '0 5 * * *'
-  workflow_dispatch: {}   # מאפשר הרצה ידנית לבדיקה מלשונית Actions
-  push:
-    branches: [main]
-    paths:                # ריצת "בנייה בלבד" לאימות אחרי שינוי קוד (ללא שליחת מייל)
-      - 'scripts/fuel-report.mjs'
-      - '.github/workflows/daily-fuel-email.yml'
+  # ההפצה האוטומטית היומית הושבתה (אין מקור חוזים חינמי ויציב).
+  # להחזרה: החזירו את בלוק ה-schedule עם cron '0 5 * * *'.
+  # כרגע ניתן להריץ ידנית בלבד מלשונית Actions (הקוד נשמר במלואו).
+  workflow_dispatch: {}
 
 # מונע ריצות חופפות אם הרצה ידנית מתנגשת עם המתוזמנת
 concurrency:
