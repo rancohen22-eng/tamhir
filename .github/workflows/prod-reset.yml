@@ -1,0 +1,72 @@
+name: PROD reset — clear booking data (manual)
+
+# ⚠ הרסני ובלתי הפיך. ריצה ידנית בלבד (workflow_dispatch), עם אישור מפורש.
+# מוחק את כל נתוני ההזמנות (bookings + קבצים + לוג + התראות) ואת יומן הכניסות,
+# ומשאיר משתמשים/מחלקות/מאשרים/סוכנים/יעדים/מטבעות. לא רץ אוטומטית על push.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'הקלד DELETE כדי לאשר מחיקת נתוני ההזמנות בפרוד'
+        required: true
+        default: ''
+
+jobs:
+  reset:
+    runs-on: ubuntu-latest
+    env:
+      HAS_SECRETS: ${{ secrets.DB_WALLET_BASE64 != '' && secrets.DB_PASSWORD != '' }}
+    steps:
+      - name: Verify confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "DELETE" ]; then
+            echo "::error::לא אושר — יש להקליד DELETE במדויק כדי להריץ את האיפוס."
+            exit 1
+          fi
+          if [ "${HAS_SECRETS}" != "true" ]; then
+            echo "::error::הסודות (DB_WALLET_BASE64 / DB_PASSWORD) לא הוגדרו."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Java (required by SQLcl)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Download SQLcl
+        run: |
+          curl -fsSL -o sqlcl.zip https://download.oracle.com/otn_software/java/sqldeveloper/sqlcl-latest.zip
+          unzip -q sqlcl.zip
+          ./sqlcl/bin/sql -V
+
+      - name: Write wallet
+        run: |
+          echo "${{ secrets.DB_WALLET_BASE64 }}" | base64 -d > wallet.zip
+          test -s wallet.zip || { echo "::error::DB_WALLET_BASE64 secret is empty"; exit 1; }
+
+      - name: Run prod_reset.sql
+        env:
+          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          DB_USER: ${{ vars.DB_USER || 'ARKIA' }}
+          DB_CONN: ${{ vars.DB_CONN || 'arkiabkg_high' }}
+        run: |
+          set -euo pipefail
+          ./sqlcl/bin/sql -S /nolog <<SQLCL
+          set cloudconfig ${{ github.workspace }}/wallet.zip
+          whenever sqlerror exit 1
+          whenever oserror exit 1
+          connect ${DB_USER}/"${DB_PASSWORD}"@${DB_CONN}
+          set define off
+          set serveroutput on
+          @bookings/deploy/prod_reset.sql
+          exit
+          SQLCL
+
+      - name: Summary
+        if: ${{ success() }}
+        run: echo "✅ prod_reset הושלם — נתוני ההזמנות נוקו, המשתמשים והנתונים הקבועים נשמרו."
