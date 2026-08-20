@@ -1,0 +1,6 @@
+node_modules
+data.dev.sqlite
+data.dev.sqlite-*
+.env
+*.log
+wallet

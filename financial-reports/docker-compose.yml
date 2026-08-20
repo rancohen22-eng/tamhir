@@ -1,0 +1,39 @@
+# הרצת מערכת הדוחות הכספיים · ארקיע
+# שימוש:  docker compose up -d --build
+# ל-HTTPS אוטומטי מול דומיין:  DOMAIN=your-domain.com docker compose --profile https up -d --build
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      TNS_ADMIN: /opt/oracle/wallet
+      PORT: 3000
+    volumes:
+      # ה-wallet של Oracle Autonomous DB (חלצו לכאן את קובץ ה-ZIP)
+      - ./wallet:/opt/oracle/wallet:ro
+    ports:
+      - "3000:3000"
+
+  # רברס-פרוקסי עם HTTPS אוטומטי (Let's Encrypt). דורש דומיין שמצביע לשרת.
+  # מופעל רק עם:  --profile https
+  caddy:
+    image: caddy:2
+    profiles: ["https"]
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+    command: >
+      caddy reverse-proxy --from ${DOMAIN:-localhost} --to app:3000
+    volumes:
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  caddy_data:
+  caddy_config:
