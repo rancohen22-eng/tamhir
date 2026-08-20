@@ -3,6 +3,7 @@ const router = require('express').Router();
 const knex = require('../db');
 const { requireAuth, requireCompanyLevel } = require('../middleware/auth');
 const { logChange } = require('../services/audit');
+const { buildFromVersion } = require('../services/build-structure');
 
 // אינדקס המרה: סעיף מאזן בוחן -> שורת דוח כספי (per חברה)
 router.get('/', requireAuth, requireCompanyLevel('view'), async (req, res) => {
@@ -53,6 +54,17 @@ router.post('/seed-from-version', requireAuth, async (req, res) => {
     }
     await logChange({ user: req.user, companyId: v.company_id, versionId: v.id }, { entity: 'index_map', action: 'seed', after: { added } });
     res.json({ added });
+  });
+});
+
+// בניית מבנה הדוח + אינדקס אוטומטית מהמאזן בוחן של הגרסה
+router.post('/build-from-version', requireAuth, async (req, res) => {
+  const v = await knex('report_versions').where({ id: req.body.version_id }).first();
+  if (!v) return res.status(404).json({ error: 'גרסה לא נמצאה' });
+  req.companyId = v.company_id;
+  return requireCompanyLevel('edit')(req, res, async () => {
+    const result = await buildFromVersion(v, { rebuild: !!req.body.rebuild, ctx: { user: req.user } });
+    res.json(result);
   });
 });
 

@@ -14,12 +14,6 @@ const knex = require('../db');
 async function computeSectionTotals(version) {
   const versionId = version.id;
 
-  // 1. בסיס מאזן בוחן
-  const base = await knex('trial_balance_rows').where({ version_id: versionId })
-    .select('tb_section_code', 'tb_section_name', 'main_header', 'sub_header')
-    .sum({ amount: 'amount' }).sum({ prior_amount: 'prior_amount' })
-    .groupBy('tb_section_code', 'tb_section_name', 'main_header', 'sub_header');
-
   const sections = {}; // code -> {code,name,mainHeader,subHeader, base, adj, reclass, prior}
   const ensure = (code, name) => {
     if (!sections[code]) {
@@ -27,13 +21,36 @@ async function computeSectionTotals(version) {
     }
     return sections[code];
   };
-  base.forEach((r) => {
-    const s = ensure(r.tb_section_code || '(ללא סעיף)', r.tb_section_name);
-    s.base += Number(r.amount) || 0;
-    s.prior += Number(r.prior_amount) || 0;
-    s.mainHeader = r.main_header; s.subHeader = r.sub_header;
-    if (r.tb_section_name) s.name = r.tb_section_name;
-  });
+
+  const company = await knex('companies').where({ id: version.company_id }).first();
+  if (company && company.is_consolidated) {
+    // 1(מאוחד). בסיס = צירוף נטו-הסעיפים של גרסאות הבנות (כולל פקודות/מיונים שלהן)
+    const { memberVersionIds } = require('./consolidation');
+    const members = await memberVersionIds(versionId);
+    for (const mid of members) {
+      const memberVersion = await knex('report_versions').where({ id: mid }).first();
+      if (!memberVersion) continue;
+      const memberSections = await computeSectionTotals(memberVersion);
+      Object.values(memberSections).forEach((ms) => {
+        const s = ensure(ms.code, ms.name);
+        s.base += ms.net; s.prior += ms.prior;
+        s.mainHeader = ms.mainHeader; s.subHeader = ms.subHeader;
+      });
+    }
+  } else {
+    // 1. בסיס מאזן בוחן
+    const base = await knex('trial_balance_rows').where({ version_id: versionId })
+      .select('tb_section_code', 'tb_section_name', 'main_header', 'sub_header')
+      .sum({ amount: 'amount' }).sum({ prior_amount: 'prior_amount' })
+      .groupBy('tb_section_code', 'tb_section_name', 'main_header', 'sub_header');
+    base.forEach((r) => {
+      const s = ensure(r.tb_section_code || '(ללא סעיף)', r.tb_section_name);
+      s.base += Number(r.amount) || 0;
+      s.prior += Number(r.prior_amount) || 0;
+      s.mainHeader = r.main_header; s.subHeader = r.sub_header;
+      if (r.tb_section_name) s.name = r.tb_section_name;
+    });
+  }
 
   // 2. פקודות נוספות
   const adj = await knex('adjustments').where({ version_id: versionId })

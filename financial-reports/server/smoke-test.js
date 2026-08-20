@@ -83,9 +83,10 @@ let server;
     const commLine = r.body.id;
     A('create fs lines', !!cashLine && !!commLine);
 
-    // זריעת אינדקס מהגרסה + מיפוי
-    r = await req('POST', '/api/index-map/seed-from-version', { json: { version_id: versionId } });
-    A('seed index from version', r.status === 200 && r.body.added === 2);
+    // אינדקס: הבנייה האוטומטית בזמן הייבוא כבר יצרה שורות לסעיפים; מוודאים שקיימות 2
+    await req('POST', '/api/index-map/seed-from-version', { json: { version_id: versionId } });
+    r = await req('GET', `/api/index-map?company_id=${companyId}`);
+    A('index has 2 sections after import+seed', r.status === 200 && r.body.length === 2);
     await req('PUT', '/api/index-map', { json: { company_id: companyId, tb_section_code: '111', fs_line_id: cashLine } });
     await req('PUT', '/api/index-map', { json: { company_id: companyId, tb_section_code: '610', fs_line_id: commLine } });
 

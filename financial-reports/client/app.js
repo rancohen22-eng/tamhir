@@ -81,7 +81,7 @@ async function startApp() {
 function buildContextSelectors() {
   const cc = $('ctxCompany'); cc.innerHTML = '';
   S.companies.forEach((c) => cc.append(el('option', { value: c.id }, c.name)));
-  cc.onchange = () => guard(async () => { S.companyId = Number(cc.value); await reloadVersions(); render(); });
+  cc.onchange = () => guard(async () => { S.companyId = Number(cc.value); await reloadVersions(); buildTabs(); render(); });
 
   const cp = $('ctxPeriod'); cp.innerHTML = '';
   S.periods.forEach((p) => cp.append(el('option', { value: p.id }, p.label || `${p.fiscal_year} · ${p.as_of_date}`)));
@@ -131,6 +131,7 @@ function cloneVersionDialog() {
 /* ═══════════ טאבים ═══════════ */
 const TABS = [
   { id: 'tb', label: 'מאזן בוחן' },
+  { id: 'consolidation', label: 'איחוד חברות', cons: true },
   { id: 'structure', label: 'מבנה הדוח' },
   { id: 'index', label: 'אינדקס המרה' },
   { id: 'adj', label: 'פקודות נוספות' },
@@ -139,9 +140,13 @@ const TABS = [
   { id: 'audit', label: 'לוג שינויים' },
   { id: 'users', label: 'משתמשים', admin: true },
 ];
+function currentCompany() { return S.companies.find((c) => c.id === S.companyId); }
 function buildTabs() {
   const nav = $('tabs'); nav.innerHTML = '';
-  TABS.filter((t) => !t.admin || S.user.is_admin).forEach((t) => {
+  const cons = currentCompany() && currentCompany().is_consolidated;
+  const visible = TABS.filter((t) => (!t.admin || S.user.is_admin) && (!t.cons || cons));
+  if (visible.every((t) => t.id !== S.tab)) S.tab = 'tb';
+  visible.forEach((t) => {
     nav.append(el('button', { class: S.tab === t.id ? 'active' : '', onclick: () => { S.tab = t.id; buildTabs(); render(); } }, t.label));
   });
 }
@@ -156,7 +161,7 @@ function render() {
     m.append(el('div', { class: 'card' }, 'בחרו או צרו גרסה כדי להתחיל לעבוד. ', canEdit() ? el('button', { class: 'btn sm', onclick: newVersionDialog }, 'גרסה חדשה') : ''));
     return;
   }
-  ({ tb: renderTB, structure: renderStructure, index: renderIndex, adj: renderAdjustments, reclass: renderReclass, report: renderReport, audit: renderAudit }[S.tab] || (() => {}))(m);
+  ({ tb: renderTB, consolidation: renderConsolidation, structure: renderStructure, index: renderIndex, adj: renderAdjustments, reclass: renderReclass, report: renderReport, audit: renderAudit }[S.tab] || (() => {}))(m);
 }
 
 function contextBanner() {
@@ -171,7 +176,9 @@ function contextBanner() {
 async function renderTB(m) {
   m.append(el('h2', { class: 'view-title' }, 'מאזן בוחן'), contextBanner());
   const tools = el('div', { class: 'toolbar' });
-  if (canEdit()) tools.append(el('button', { class: 'btn sm', onclick: importDialog }, '⬆ ייבוא מאזן בוחן מאקסל'));
+  if (canEdit()) tools.append(
+    el('button', { class: 'btn sm', onclick: standardImportDialog }, '⬆ ייבוא קובץ סטנדרטי (רב-חברתי)'),
+    el('button', { class: 'btn sec sm', onclick: importDialog }, 'ייבוא עם מיפוי עמודות'));
   m.append(tools);
   const wrap = el('div', { class: 'card' }, 'טוען…');
   m.append(wrap);
@@ -286,9 +293,105 @@ function mappingDialog(fileObj, preview) {
     fd.append('version_id', S.versionId);
     fd.append('options', JSON.stringify({ sheetName: preview.sheets[Number(sheetSel.value)].name, headerRow: Number(headerRow.value), map }));
     const r = await API.postForm('/trial-balance/import', fd);
-    toast(`יובאו ${r.imported} שורות`);
+    if (r.structure) toast(`יובאו ${r.imported} שורות · נבנו אוטומטית ${r.structure.lines} שורות דוח ומופו ${r.structure.mapped} סעיפים`);
+    else toast(`יובאו ${r.imported} שורות`);
     render();
   }, 'ייבא');
+}
+
+/* ── ייבוא קובץ סטנדרטי רב-חברתי ── */
+function standardImportDialog() {
+  const file = el('input', { type: 'file', accept: '.xlsx,.xls' });
+  const body = el('div', {},
+    el('div', { class: 'field' }, el('label', {}, 'קובץ ייצוא סטנדרטי מהמערכת הפיננסית'), file),
+    el('p', { class: 'muted', style: 'font-size:13px' }, 'הקובץ יזוהה אוטומטית (עמודות: כותרת ראשית / משנה / סעיף / חשבון / תיאור / חברה / יתרה) ויפוצל לפי חברה. לכל חברה תיווצר גרסה חדשה ויבנה מבנה הדוח אוטומטית.'));
+  modal('ייבוא קובץ סטנדרטי', body, async () => {
+    if (!file.files[0]) { toast('בחרו קובץ', true); return false; }
+    const fd = new FormData(); fd.append('file', file.files[0]);
+    const prev = await API.postForm('/trial-balance/import-standard/preview', fd);
+    standardMappingDialog(file.files[0], prev);
+    return true;
+  }, 'זיהוי חברות');
+}
+function standardMappingDialog(fileObj, prev) {
+  const periodSel = el('select', {});
+  S.periods.forEach((p) => periodSel.append(el('option', { value: p.id }, p.label || `${p.fiscal_year}`)));
+  periodSel.value = S.periodId || (S.periods[0] && S.periods[0].id);
+  const vname = el('input', { value: 'ייבוא ' + new Date().toLocaleDateString('he-IL') });
+  const rows = el('div', {});
+  const selects = {};
+  prev.groups.forEach((g) => {
+    const sel = el('select', {});
+    sel.append(el('option', { value: '' }, '— לא לייבא —'));
+    S.companies.filter((c) => !c.is_consolidated).forEach((c) => sel.append(el('option', { value: c.id }, c.name)));
+    if (g.matchedCompanyId) sel.value = g.matchedCompanyId;
+    selects[g.fileCompany] = sel;
+    rows.append(el('div', { class: 'field' }, el('label', {}, `${g.fileCompany} (${g.count} שורות) →`), sel));
+  });
+  const body = el('div', {},
+    el('div', { class: 'field' }, el('label', {}, 'תקופת דוח'), periodSel),
+    el('div', { class: 'field' }, el('label', {}, 'שם הגרסה'), vname),
+    el('hr'), el('label', { class: 'muted' }, 'מיפוי חברות מהקובץ לחברות במערכת:'), rows);
+  modal('אישור ייבוא רב-חברתי', body, async () => {
+    const mapping = prev.groups.map((g) => ({ fileCompany: g.fileCompany, company_id: selects[g.fileCompany].value ? Number(selects[g.fileCompany].value) : null, version_name: vname.value }));
+    const fd = new FormData();
+    fd.append('file', fileObj); fd.append('period_id', periodSel.value); fd.append('mapping', JSON.stringify(mapping));
+    const r = await API.postForm('/trial-balance/import-standard/commit', fd);
+    const ok = r.results.filter((x) => x.imported);
+    toast(`יובאו ${ok.length} חברות (${ok.reduce((s, x) => s + x.imported, 0)} שורות)`);
+    await reloadVersions(); render();
+  }, 'ייבא');
+}
+
+/* ── איחוד חברות ── */
+async function renderConsolidation(m) {
+  m.append(el('h2', { class: 'view-title' }, 'איחוד חברות'), contextBanner());
+  if (!S.versionId) { m.append(el('div', { class: 'card' }, 'צרו גרסת מאוחד תחילה (בורר הגרסה למעלה).')); return; }
+  const wrap = el('div', {}); m.append(wrap);
+  await guard(async () => {
+    const [members, candidates] = await Promise.all([
+      API.get(`/consolidation/${S.versionId}/members`),
+      API.get(`/consolidation/${S.versionId}/candidates`),
+    ]);
+    const memberIds = new Set(members.map((x) => x.id));
+
+    const mcard = el('div', { class: 'card' }, el('h3', { style: 'margin-top:0; color:var(--brand)' }, 'חברות בנות בגרסת המאוחד'));
+    if (!members.length) mcard.append(el('div', { class: 'muted' }, 'טרם נוספו חברות בנות.'));
+    else {
+      const t = el('table', { class: 'grid' }, el('thead', {}, el('tr', {}, el('th', {}, 'חברה'), el('th', {}, 'גרסה'), el('th', {}, ''))));
+      const tb = el('tbody');
+      members.forEach((mem) => tb.append(el('tr', {}, el('td', {}, mem.company_name), el('td', {}, mem.name),
+        el('td', {}, canEdit() ? el('button', { class: 'btn danger sm', onclick: () => guard(async () => { await API.del(`/consolidation/${S.versionId}/members/${mem.id}`); render(); }) }, 'הסר') : ''))));
+      t.append(tb); mcard.append(t);
+    }
+    if (canEdit()) mcard.append(el('div', { class: 'toolbar', style: 'margin-top:10px' },
+      el('button', { class: 'btn sm', onclick: () => buildConsolidatedStructure() }, '⚙ בנה מבנה מאוחד מהבנות'),
+      el('button', { class: 'btn sec sm', onclick: () => buildConsolidatedStructure(true) }, 'בנייה מחדש')));
+    wrap.append(mcard);
+
+    if (canEdit()) {
+      const add = candidates.filter((c) => !memberIds.has(c.id));
+      const ccard = el('div', { class: 'card' }, el('h3', { style: 'margin-top:0; color:var(--brand)' }, 'הוספת חברות בנות (אותה תקופה)'));
+      if (!add.length) ccard.append(el('div', { class: 'muted' }, 'אין גרסאות זמינות להוספה בתקופה זו.'));
+      else {
+        const t = el('table', { class: 'grid' }, el('thead', {}, el('tr', {}, el('th', {}, 'חברה'), el('th', {}, 'גרסה'), el('th', {}, ''))));
+        const tb = el('tbody');
+        add.forEach((c) => tb.append(el('tr', {}, el('td', {}, c.company_name), el('td', {}, c.name),
+          el('td', {}, el('button', { class: 'btn sm', onclick: () => guard(async () => { await API.post(`/consolidation/${S.versionId}/members`, { member_version_id: c.id }); render(); }) }, '+ הוסף')))));
+        t.append(tb); ccard.append(t);
+      }
+      wrap.append(ccard);
+    }
+    wrap.append(el('div', { class: 'muted', style: 'font-size:13px' }, 'לאחר בניית המבנה: הדוח המאוחד (טאב "דוחות וביאורים") מצרף את הבנות. "פקודות נוספות" ו"פקודות מיון" בגרסה זו מתפקדות כפקודות איחוד ומיון של המאוחד.'));
+  });
+}
+function buildConsolidatedStructure(rebuild) {
+  if (rebuild && !confirm('בנייה מחדש תמחק את מבנה המאוחד ותבנה מהבנות מחדש. להמשיך?')) return;
+  guard(async () => {
+    const r = await API.post(`/consolidation/${S.versionId}/build-structure`, { rebuild: !!rebuild });
+    toast(`נבנו ${r.lines} שורות · ${r.mapped}/${r.sections} סעיפים מופו`);
+    render();
+  });
 }
 
 /* ═══════════ מבנה הדוח (fs_lines) ═══════════ */
@@ -345,8 +448,10 @@ function deleteFsLine(line) {
 async function renderIndex(m) {
   m.append(el('h2', { class: 'view-title' }, 'אינדקס המרה: סעיף מאזן בוחן ← שורת דוח'), contextBanner());
   if (canEdit()) m.append(el('div', { class: 'toolbar' },
-    el('span', { class: 'muted' }, 'זריעת סעיפים חסרים מהגרסה הנוכחית:'),
-    el('button', { class: 'btn sm', onclick: seedIndex, disabled: S.versionId ? null : 'disabled' }, 'זריעה ממאזן בוחן')));
+    el('button', { class: 'btn sm', onclick: buildStructure, disabled: S.versionId ? null : 'disabled' }, '⚙ בנה מבנה ואינדקס אוטומטית מהמאזן'),
+    el('button', { class: 'btn sec sm', onclick: () => buildStructure(true), disabled: S.versionId ? null : 'disabled' }, 'בנייה מחדש'),
+    el('span', { class: 'muted' }, '·'),
+    el('button', { class: 'btn sec sm', onclick: seedIndex, disabled: S.versionId ? null : 'disabled' }, 'זריעת סעיפים ריקים בלבד')));
   const wrap = el('div', { class: 'card' }, 'טוען…'); m.append(wrap);
   await guard(async () => {
     const [maps, lines] = await Promise.all([API.get(`/index-map?company_id=${S.companyId}`), API.get(`/fs-lines?company_id=${S.companyId}`)]);
@@ -370,6 +475,14 @@ async function renderIndex(m) {
   });
 }
 function seedIndex() { guard(async () => { const r = await API.post('/index-map/seed-from-version', { version_id: S.versionId }); toast(`נוספו ${r.added} סעיפים`); render(); }); }
+function buildStructure(rebuild) {
+  if (rebuild && !confirm('בנייה מחדש תמחק את מבנה הדוח שנבנה אוטומטית ותבנה מהמאזן מחדש. להמשיך?')) return;
+  guard(async () => {
+    const r = await API.post('/index-map/build-from-version', { version_id: S.versionId, rebuild: !!rebuild });
+    toast(`נבנו ${r.headers} כותרות · ${r.lines} שורות · ${r.mapped}/${r.sections} סעיפים מופו`);
+    render();
+  });
+}
 
 /* ═══════════ פקודות נוספות ═══════════ */
 async function renderAdjustments(m) {

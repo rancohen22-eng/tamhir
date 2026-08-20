@@ -33,6 +33,7 @@ app.use('/api/fs-lines', require('./routes/fs-lines'));
 app.use('/api/adjustments', require('./routes/adjustments'));
 app.use('/api/reclass', require('./routes/reclass'));
 app.use('/api/reports', require('./routes/reports'));
+app.use('/api/consolidation', require('./routes/consolidation'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/audit', require('./routes/audit'));
 
