@@ -4,6 +4,8 @@ const knex = require('../db');
 const { requireAuth } = require('../middleware/auth');
 const { resolveVersion } = require('../middleware/version');
 const { computeReport, drillLine } = require('../services/report-engine');
+const { computeCashflow } = require('../services/cashflow-engine');
+const { computeEquity } = require('../services/equity-engine');
 const { buildReportDocx } = require('../services/docx-export');
 
 // חישוב הדוח המלא לגרסה
@@ -20,10 +22,12 @@ router.get('/drill/:fsLineId', requireAuth, resolveVersion('view'), async (req, 
 
 // ייצוא הדוח ל-Word (.docx)
 router.get('/export/word', requireAuth, resolveVersion('view'), async (req, res) => {
-  const report = await computeReport(req.version);
+  const [report, cashflow, equity] = await Promise.all([
+    computeReport(req.version), computeCashflow(req.version), computeEquity(req.version),
+  ]);
   const company = await knex('companies').where({ id: req.version.company_id }).first();
   const period = await knex('periods').where({ id: req.version.period_id }).first();
-  const buffer = await buildReportDocx({ report, company, period, version: req.version });
+  const buffer = await buildReportDocx({ report, cashflow, equity, company, period, version: req.version });
   const fname = `financial-report-${company.code || company.id}-${period.fiscal_year}.docx`;
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
   res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);

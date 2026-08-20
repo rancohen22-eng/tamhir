@@ -98,7 +98,54 @@ function statementTable(lines, period) {
   });
 }
 
-async function buildReportDocx({ report, company, period, version }) {
+// טבלת תזרים מזומנים פשוטה (תווית | סכום)
+function cashflowTable(cashflow) {
+  const noBorder = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+  const topBorder = { style: BorderStyle.SINGLE, size: 4, color: '000000' };
+  const rows = [];
+  cashflow.sections.forEach((sec) => {
+    if (!sec.lines.length) return;
+    rows.push(new TableRow({ children: [
+      new TableCell({ width: { size: 75, type: WidthType.PERCENTAGE }, children: [p(sec.label, { bold: true })] }),
+      new TableCell({ children: [p('')] }),
+    ] }));
+    sec.lines.forEach((l) => rows.push(new TableRow({ children: [
+      new TableCell({ children: [p((l.is_subtotal ? '' : '   ') + l.label, { bold: l.is_subtotal })] }),
+      new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: fmt(l.value), bold: l.is_subtotal })], border: l.is_subtotal ? { top: topBorder } : undefined })] }),
+    ] })));
+  });
+  const S = cashflow.subtotals;
+  [['שינוי נטו במזומנים', S.netChange], ['יתרת מזומנים לתחילת התקופה', cashflow.control.openingCash], ['יתרת מזומנים לסוף התקופה', cashflow.control.closingCashActual]]
+    .forEach(([lbl, val]) => rows.push(new TableRow({ children: [
+      new TableCell({ children: [p(lbl, { bold: true })] }),
+      new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: fmt(val), bold: true })], border: { top: topBorder } })] }),
+    ] })));
+  return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, visuallyRightToLeft: true,
+    borders: { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder, insideHorizontal: noBorder, insideVertical: noBorder }, rows });
+}
+
+// טבלת שינויים בהון (עמודות רכיבים)
+function equityTable(equity) {
+  const border = { style: BorderStyle.SINGLE, size: 2, color: 'CCCCCC' };
+  const cols = equity.columns;
+  const headCells = [new TableCell({ children: [p('תנועה', { bold: true })] })];
+  cols.forEach((c) => headCells.push(new TableCell({ children: [p(c.label, { bold: true, align: AlignmentType.CENTER, size: 16 })] })));
+  headCells.push(new TableCell({ children: [p('סה"כ', { bold: true, align: AlignmentType.CENTER })] }));
+  const rows = [new TableRow({ tableHeader: true, children: headCells })];
+  const mkRow = (r, bold) => {
+    const cells = [new TableCell({ children: [p(r.label, { bold })] })];
+    cols.forEach((c) => cells.push(new TableCell({ children: [p(fmt(r.values[c.id]), { align: AlignmentType.CENTER, bold })] })));
+    cells.push(new TableCell({ children: [p(fmt(r.values.total), { align: AlignmentType.CENTER, bold })] }));
+    return new TableRow({ children: cells });
+  };
+  rows.push(mkRow(equity.rows[0], true));
+  equity.rows.slice(1).forEach((r) => rows.push(mkRow(r, false)));
+  rows.push(mkRow(equity.closing, true));
+  return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, visuallyRightToLeft: true,
+    borders: { top: border, bottom: border, left: border, right: border, insideHorizontal: border, insideVertical: border }, rows });
+}
+
+async function buildReportDocx({ report, cashflow, equity, company, period, version }) {
   const children = [];
 
   // ---- שער ----
@@ -117,6 +164,19 @@ async function buildReportDocx({ report, company, period, version }) {
   children.push(p('דוח על רווח או הפסד', { bold: true, size: 26, heading: HeadingLevel.HEADING_1, spacing: { before: 400, after: 120 } }));
   if (report.pnl.length) children.push(statementTable(report.pnl, period));
   else children.push(p('(לא הוגדרו שורות רווח והפסד)', { color: '999999' }));
+
+  // ---- דוח על השינויים בהון ----
+  if (equity && equity.columns && equity.columns.length) {
+    children.push(p('דוח על השינויים בהון', { bold: true, size: 26, heading: HeadingLevel.HEADING_1, spacing: { before: 400, after: 120 } }));
+    children.push(equityTable(equity));
+  }
+
+  // ---- דוח על תזרימי המזומנים ----
+  if (cashflow && cashflow.sections && cashflow.sections.some((s) => s.lines.length)) {
+    children.push(p('דוח על תזרימי המזומנים', { bold: true, size: 26, heading: HeadingLevel.HEADING_1, spacing: { before: 400, after: 120 } }));
+    children.push(cashflowTable(cashflow));
+    if (!cashflow.control.ok) children.push(p(`⚠ בקרת תזרים: הפרש ${fmt(cashflow.control.diff)} אלפי דולר`, { color: 'B3261E', size: 18 }));
+  }
 
   // ---- סעיפים לא ממופים (אזהרה) ----
   if (report.unmapped && report.unmapped.length) {

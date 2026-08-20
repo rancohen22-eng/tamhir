@@ -6,6 +6,7 @@ const S = {
   companyId: null, periodId: null, versionId: null,
   level: null, // רמת הרשאה לחברה הנוכחית
   tab: 'tb',
+  stmtTab: 'balance', // תת-לשונית בדוחות ראשיים
 };
 
 /* ═══════════ עזרי DOM ═══════════ */
@@ -136,7 +137,7 @@ const TABS = [
   { id: 'index', label: 'אינדקס המרה' },
   { id: 'adj', label: 'פקודות נוספות' },
   { id: 'reclass', label: 'פקודות מיון' },
-  { id: 'report', label: 'דוחות וביאורים' },
+  { id: 'report', label: 'דוחות ראשיים' },
   { id: 'audit', label: 'לוג שינויים' },
   { id: 'users', label: 'משתמשים', admin: true },
 ];
@@ -553,24 +554,142 @@ function delRow(kind, id) { if (!confirm('למחוק?')) return; guard(async () 
 
 /* ═══════════ דוחות וביאורים ═══════════ */
 async function renderReport(m) {
-  m.append(el('h2', { class: 'view-title' }, 'דוחות כספיים וביאורים'), contextBanner());
-  m.append(el('div', { class: 'toolbar' },
-    el('button', { class: 'btn sm', onclick: exportWord }, '⬇ ייצוא ל-Word'),
-    el('span', { class: 'muted' }, 'לחיצה על שורה פותחת תחקור עד רמת חשבון')));
-  const wrap = el('div', {}); m.append(wrap);
+  m.append(el('h2', { class: 'view-title' }, 'דוחות ראשיים'), contextBanner());
+  const sub = S.stmtTab || 'balance';
+  const subtabs = [['balance', 'מאזן'], ['pnl', 'רווח והפסד'], ['equity', 'שינויים בהון'], ['cashflow', 'תזרים מזומנים']];
+  const nav = el('div', { class: 'toolbar' });
+  subtabs.forEach(([id, lbl]) => nav.append(el('button', { class: 'btn ' + (sub === id ? '' : 'sec') + ' sm', onclick: () => { S.stmtTab = id; render(); } }, lbl)));
+  nav.append(el('span', { style: 'flex:1' }));
+  nav.append(el('button', { class: 'btn sec sm', onclick: exportWord }, '⬇ ייצוא ל-Word'));
+  m.append(nav);
+  const wrap = el('div', {}, 'טוען…'); m.append(wrap);
   await guard(async () => {
-    const rep = await API.get(`/reports?version_id=${S.versionId}`);
+    const st = await API.get(`/statements/${S.versionId}`);
     wrap.innerHTML = '';
-    if (rep.unmapped && rep.unmapped.length) {
-      const box = el('div', { class: 'card', style: 'border-color:var(--warn)' },
-        el('b', { style: 'color:var(--warn)' }, `⚠ ${rep.unmapped.length} סעיפי מאזן בוחן אינם ממופים לשורת דוח `),
-        el('span', { class: 'muted' }, '(היכנסו ל"אינדקס המרה"). '),
-        el('div', { class: 'muted', style: 'font-size:12.5px; margin-top:6px' }, rep.unmapped.slice(0, 10).map((u) => `${u.code} (${money(u.net)})`).join(' · ')));
-      wrap.append(box);
-    }
-    wrap.append(statementCard('דוח על המצב הכספי', rep.balance));
-    wrap.append(statementCard('דוח על רווח או הפסד', rep.pnl));
+    wrap.append(el('div', { class: 'muted', style: 'font-size:13px; margin-bottom:8px' },
+      `גרסת פתיחה/השוואה: ${st.opening ? st.opening.name : '— לא נמצאה —'} `,
+      canEdit() ? el('button', { class: 'btn sec sm', onclick: () => priorDialog() }, 'שינוי') : ''));
+    if (sub === 'balance' || sub === 'pnl') {
+      if (sub === 'balance' && st.unmapped && st.unmapped.length) wrap.append(unmappedWarn(st.unmapped));
+      wrap.append(el('div', { class: 'muted', style: 'font-size:12.5px;margin-bottom:6px' }, 'לחיצה על שורה פותחת תחקור עד רמת חשבון'));
+      wrap.append(statementCard(sub === 'balance' ? 'דוח על המצב הכספי' : 'דוח על רווח או הפסד', sub === 'balance' ? st.balance : st.pnl));
+    } else if (sub === 'cashflow') { renderCashflow(wrap, st.cashflow); }
+    else if (sub === 'equity') { renderEquity(wrap, st.equity); }
   });
+}
+function unmappedWarn(unmapped) {
+  return el('div', { class: 'card', style: 'border-color:var(--warn)' },
+    el('b', { style: 'color:var(--warn)' }, `⚠ ${unmapped.length} סעיפי מאזן בוחן אינם ממופים לשורת דוח `),
+    el('span', { class: 'muted' }, '(היכנסו ל"אינדקס המרה"). '),
+    el('div', { class: 'muted', style: 'font-size:12.5px; margin-top:6px' }, unmapped.slice(0, 10).map((u) => `${u.code} (${money(u.net)})`).join(' · ')));
+}
+function priorDialog() {
+  guard(async () => {
+    const cands = await API.get(`/statements/${S.versionId}/prior-candidates`);
+    const sel = el('select', {});
+    sel.append(el('option', { value: '' }, '— אוטומטי (דוח שנתי סופי אחרון) —'));
+    cands.forEach((c) => sel.append(el('option', { value: c.id }, `${c.name} · ${c.as_of_date} ${c.status === 'final' ? '(סופי)' : ''}`)));
+    modal('גרסת פתיחה/השוואה', el('div', { class: 'field' }, el('label', {}, 'בחרו גרסה (או אוטומטי)'), sel), async () => {
+      await API.put(`/statements/${S.versionId}/prior`, { prior_version_id: sel.value ? Number(sel.value) : null });
+      render(); toast('עודכן');
+    });
+  });
+}
+
+/* ── תזרים מזומנים + נייר עבודה + בקרה ── */
+function renderCashflow(wrap, cf) {
+  if (!cf.sections.some((s) => s.lines.length)) {
+    wrap.append(el('div', { class: 'card' }, 'לא הוגדר מבנה תזרים. ',
+      canEdit() ? el('button', { class: 'btn sm', onclick: seedCashflow }, 'זריעת מבנה תזרים ברירת-מחדל') : ''));
+    return;
+  }
+  if (canEdit()) wrap.append(el('div', { class: 'toolbar' }, el('button', { class: 'btn sec sm', onclick: seedCashflow }, 'זריעה מחדש של מבנה התזרים')));
+
+  const card = el('div', { class: 'card' });
+  const tbl = el('table', { class: 'grid' }, el('thead', {}, el('tr', {},
+    el('th', {}, 'סעיף'), el('th', { class: 'num' }, 'סכום'), el('th', { class: 'num' }, 'שוטף'), el('th', { class: 'num' }, 'פתיחה'), el('th', {}, 'מקור'))));
+  const tb = el('tbody');
+  cf.sections.forEach((sec) => {
+    if (!sec.lines.length) return;
+    tb.append(el('tr', { class: 'row-header' }, el('td', { colspan: 5 }, sec.label)));
+    sec.lines.forEach((l) => {
+      const srcTxt = { netprofit: 'רווח נקי', pnl: 'רו"ה', bs_move: 'תנועת מאזן', manual: 'ידני' }[l.source_type] || l.source_type;
+      const amtCell = (l.source_type === 'manual' && !l.is_subtotal && canEdit())
+        ? el('td', { class: 'num' }, editableNum(l.value, (val) => saveCashflowValue(l.id, val)))
+        : el('td', { class: 'num' }, nf2.format(l.value));
+      tb.append(el('tr', { class: l.is_subtotal ? 'row-total' : '' },
+        el('td', {}, l.label), amtCell,
+        el('td', { class: 'num' }, l.cur != null ? nf0fmt(l.cur) : ''),
+        el('td', { class: 'num' }, l.open != null ? nf0fmt(l.open) : ''),
+        el('td', { class: 'muted', style: 'font-size:12px' }, l.is_subtotal ? '' : srcTxt)));
+    });
+    tb.append(el('tr', { class: 'row-total' }, el('td', {}, `סה"כ ${sec.label}`), el('td', { class: 'num' }, nf2.format(sec.total)), el('td', {}), el('td', {}), el('td', {})));
+  });
+  tbl.append(tb); card.append(tbl);
+
+  // סיכומים
+  const s = cf.subtotals;
+  card.append(el('div', { style: 'margin-top:10px' },
+    sumRow('מזומנים נטו מפעילות שוטפת', s.operating),
+    sumRow('מזומנים נטו מפעילות השקעה', s.investing),
+    sumRow('מזומנים נטו מפעילות מימון', s.financing),
+    sumRow('הפרשי שער על מזומנים', s.fx),
+    sumRow('שינוי נטו במזומנים', s.netChange, true)));
+  wrap.append(card);
+
+  // בקרה
+  const c = cf.control;
+  wrap.append(el('div', { class: 'card', style: `border-color:${c.ok ? 'var(--accent)' : 'var(--danger)'}` },
+    el('h3', { style: `margin-top:0; color:${c.ok ? 'var(--accent)' : 'var(--danger)'}` }, `בקרת תזרים ${c.ok ? '✓ תקין' : '✗ פער'}`),
+    sumRow('יתרת מזומנים לתחילת התקופה', c.openingCash),
+    sumRow('+ שינוי נטו במזומנים', s.netChange),
+    sumRow('= יתרת מזומנים מחושבת', c.closingCashComputed),
+    sumRow('יתרת מזומנים בפועל (מאזן)', c.closingCashActual),
+    sumRow('הפרש בקרה', c.diff, true)));
+}
+function sumRow(label, val, bold) {
+  return el('div', { style: `display:flex; justify-content:space-between; padding:3px 4px; ${bold ? 'font-weight:700; border-top:1px solid var(--line)' : ''}` },
+    el('span', {}, label), el('span', { style: 'font-variant-numeric:tabular-nums; direction:ltr' }, nf2.format(val || 0)));
+}
+const nf0fmt = (v) => nf.format(Math.round(Number(v) || 0));
+function editableNum(val, onSave) {
+  const inp = el('input', { type: 'number', step: 'any', value: val || 0, style: 'width:120px; text-align:left; direction:ltr' });
+  inp.onchange = () => guard(async () => { await onSave(Number(inp.value) || 0); });
+  return inp;
+}
+function seedCashflow() { guard(async () => { await API.post(`/statements/${S.versionId}/cashflow/seed`, { rebuild: true }); toast('מבנה התזרים נוצר'); render(); }); }
+function saveCashflowValue(lineId, amount) { return API.put(`/statements/${S.versionId}/cashflow/value`, { cashflow_line_id: lineId, amount }).then(() => { toast('נשמר'); render(); }); }
+
+/* ── שינויים בהון ── */
+function renderEquity(wrap, eq) {
+  if (!eq.columns.length) { wrap.append(el('div', { class: 'card' }, 'לא זוהו רכיבי הון במבנה הדוח. ודאו שקיימות שורות תחת כותרת "הון".')); return; }
+  const card = el('div', { class: 'card', style: 'overflow-x:auto' });
+  const cols = eq.columns;
+  const head = el('tr', {}, el('th', {}, 'תנועה'));
+  cols.forEach((c) => head.append(el('th', { class: 'num' }, c.label)));
+  head.append(el('th', { class: 'num' }, 'סה"כ'));
+  const tbl = el('table', { class: 'grid' }, el('thead', {}, head));
+  const tb = el('tbody');
+  const rowEl = (r, cls) => {
+    const tr = el('tr', { class: cls || '' }, el('td', {}, r.label));
+    cols.forEach((c) => tr.append(el('td', { class: 'num' }, nf0fmt(r.values[c.id]))));
+    tr.append(el('td', { class: 'num' }, nf0fmt(r.values.total)));
+    return tr;
+  };
+  tb.append(rowEl(eq.rows[0], 'row-header'));
+  eq.rows.slice(1).forEach((r) => tb.append(rowEl(r)));
+  // שורת בלתי-מוסבר (פלאג) אם יש
+  if (Math.abs(eq.unexplained.total) >= 1) {
+    const tr = el('tr', { class: '' }, el('td', { style: 'color:var(--warn)' }, 'בלתי-מוסבר (דורש פירוק תנועות)'));
+    cols.forEach((c) => tr.append(el('td', { class: 'num', style: 'color:var(--warn)' }, nf0fmt(eq.unexplained[c.id]))));
+    tr.append(el('td', { class: 'num', style: 'color:var(--warn)' }, nf0fmt(eq.unexplained.total)));
+    tb.append(tr);
+  }
+  tb.append(rowEl(eq.closing, 'row-total'));
+  tbl.append(tb); card.append(tbl);
+  card.append(el('div', { class: 'muted', style: 'font-size:12.5px; margin-top:8px' },
+    `רווח נקי לתקופה: ${nf0fmt(eq.netProfit)} · ${eq.control.ok ? 'ההון מתלכד ✓' : 'קיים סכום בלתי-מוסבר — הוסיפו שורות תנועה (OCI/דיבידנד/הנפקה) לפירוק'}`));
+  wrap.append(card);
 }
 function statementCard(title, lines) {
   const card = el('div', { class: 'card' }, el('h3', { style: 'margin-top:0; color:var(--brand)' }, title));
