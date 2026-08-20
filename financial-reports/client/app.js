@@ -139,6 +139,7 @@ const TABS = [
   { id: 'reclass', label: 'פקודות מיון' },
   { id: 'report', label: 'דוחות ראשיים' },
   { id: 'audit', label: 'לוג שינויים' },
+  { id: 'companies', label: 'חברות', admin: true },
   { id: 'users', label: 'משתמשים', admin: true },
 ];
 function currentCompany() { return S.companies.find((c) => c.id === S.companyId); }
@@ -156,6 +157,7 @@ function buildTabs() {
 function render() {
   const m = $('main'); m.innerHTML = '';
   if (S.tab === 'users') return void renderUsers(m);
+  if (S.tab === 'companies') return void renderCompanies(m);
   if (!S.level) { m.append(el('div', { class: 'card' }, 'אין לך הרשאה לחברה זו.')); return; }
   const needVersion = ['tb', 'adj', 'reclass', 'report', 'audit'].includes(S.tab);
   if (needVersion && !S.versionId) {
@@ -359,10 +361,19 @@ async function renderConsolidation(m) {
     const mcard = el('div', { class: 'card' }, el('h3', { style: 'margin-top:0; color:var(--brand)' }, 'חברות בנות בגרסת המאוחד'));
     if (!members.length) mcard.append(el('div', { class: 'muted' }, 'טרם נוספו חברות בנות.'));
     else {
-      const t = el('table', { class: 'grid' }, el('thead', {}, el('tr', {}, el('th', {}, 'חברה'), el('th', {}, 'גרסה'), el('th', {}, ''))));
+      const t = el('table', { class: 'grid' }, el('thead', {}, el('tr', {},
+        el('th', {}, 'חברה'), el('th', {}, 'גרסה'), el('th', {}, 'אחזקה %'), el('th', {}, 'שיטה'), el('th', {}, ''))));
       const tb = el('tbody');
-      members.forEach((mem) => tb.append(el('tr', {}, el('td', {}, mem.company_name), el('td', {}, mem.name),
-        el('td', {}, canEdit() ? el('button', { class: 'btn danger sm', onclick: () => guard(async () => { await API.del(`/consolidation/${S.versionId}/members/${mem.id}`); render(); }) }, 'הסר') : ''))));
+      members.forEach((mem) => {
+        const pct = el('input', { type: 'number', step: 'any', value: mem.holding_pct, style: 'width:80px', disabled: canEdit() ? null : 'disabled' });
+        const method = el('select', { disabled: canEdit() ? null : 'disabled' });
+        [['full', 'איחוד מלא'], ['equity', 'שווי מאזני (אקוויטי)']].forEach(([v, l]) => method.append(el('option', { value: v }, l)));
+        method.value = mem.method || 'full';
+        const saveMem = () => guard(async () => { await API.patch(`/consolidation/${S.versionId}/members/${mem.id}`, { holding_pct: Number(pct.value), method: method.value }); toast('נשמר'); });
+        pct.onchange = saveMem; method.onchange = saveMem;
+        tb.append(el('tr', {}, el('td', {}, mem.company_name), el('td', {}, mem.name), el('td', {}, pct), el('td', {}, method),
+          el('td', {}, canEdit() ? el('button', { class: 'btn danger sm', onclick: () => guard(async () => { await API.del(`/consolidation/${S.versionId}/members/${mem.id}`); render(); }) }, 'הסר') : '')));
+      });
       t.append(tb); mcard.append(t);
     }
     if (canEdit()) mcard.append(el('div', { class: 'toolbar', style: 'margin-top:10px' },
@@ -375,10 +386,16 @@ async function renderConsolidation(m) {
       const ccard = el('div', { class: 'card' }, el('h3', { style: 'margin-top:0; color:var(--brand)' }, 'הוספת חברות בנות (אותה תקופה)'));
       if (!add.length) ccard.append(el('div', { class: 'muted' }, 'אין גרסאות זמינות להוספה בתקופה זו.'));
       else {
-        const t = el('table', { class: 'grid' }, el('thead', {}, el('tr', {}, el('th', {}, 'חברה'), el('th', {}, 'גרסה'), el('th', {}, ''))));
+        const t = el('table', { class: 'grid' }, el('thead', {}, el('tr', {},
+          el('th', {}, 'חברה'), el('th', {}, 'גרסה'), el('th', {}, 'אחזקה %'), el('th', {}, 'שיטה'), el('th', {}, ''))));
         const tb = el('tbody');
-        add.forEach((c) => tb.append(el('tr', {}, el('td', {}, c.company_name), el('td', {}, c.name),
-          el('td', {}, el('button', { class: 'btn sm', onclick: () => guard(async () => { await API.post(`/consolidation/${S.versionId}/members`, { member_version_id: c.id }); render(); }) }, '+ הוסף')))));
+        add.forEach((c) => {
+          const pct = el('input', { type: 'number', step: 'any', value: 100, style: 'width:80px' });
+          const method = el('select', {});
+          [['full', 'איחוד מלא'], ['equity', 'שווי מאזני']].forEach(([v, l]) => method.append(el('option', { value: v }, l)));
+          tb.append(el('tr', {}, el('td', {}, c.company_name), el('td', {}, c.name), el('td', {}, pct), el('td', {}, method),
+            el('td', {}, el('button', { class: 'btn sm', onclick: () => guard(async () => { await API.post(`/consolidation/${S.versionId}/members`, { member_version_id: c.id, holding_pct: Number(pct.value), method: method.value }); render(); }) }, '+ הוסף'))));
+        });
         t.append(tb); ccard.append(t);
       }
       wrap.append(ccard);
@@ -523,19 +540,82 @@ function adjDialog(row) {
 /* ═══════════ פקודות מיון ═══════════ */
 async function renderReclass(m) {
   m.append(el('h2', { class: 'view-title' }, 'גליון פקודות מיון'), contextBanner());
-  if (canEdit()) m.append(el('div', { class: 'toolbar' }, el('button', { class: 'btn sm', onclick: () => reclassDialog() }, '+ מיון חדש')));
+
+  // ── חוקי מיון אוטומטי ──
+  const rulesCard = el('div', { class: 'card' }, 'טוען חוקים…'); m.append(rulesCard);
+  await guard(async () => {
+    const rules = await API.get(`/reclass-rules?company_id=${S.companyId}`);
+    rulesCard.innerHTML = '';
+    rulesCard.append(el('div', { class: 'toolbar' },
+      el('b', { style: 'color:var(--brand)' }, 'חוקי מיון אוטומטי'),
+      el('span', { style: 'flex:1' }),
+      canEdit() ? el('button', { class: 'btn sm', onclick: () => ruleDialog() }, '+ חוק חדש') : '',
+      canEdit() ? el('button', { class: 'btn sec sm', onclick: applyRules }, '⚙ החל חוקים') : ''));
+    if (!rules.length) rulesCard.append(el('div', { class: 'muted' }, 'אין חוקים. דוגמה: "כל היתרות השליליות בסעיף מזומנים ושווי מזומנים → משיכות יתר".'));
+    else {
+      const t = el('table', { class: 'grid' }, el('thead', {}, el('tr', {},
+        el('th', {}, 'שם'), el('th', {}, 'תחום'), el('th', {}, 'תנאי'), el('th', {}, 'רמה'), el('th', {}, 'סעיף יעד'), el('th', {}, 'פעיל'), el('th', {}, ''))));
+      const tb = el('tbody');
+      const scopeTxt = { section: 'סעיף', subheader: 'כותרת משנה', all: 'הכל' };
+      const signTxt = { negative: 'יתרות שליליות', positive: 'יתרות חיוביות', all: 'כל היתרות' };
+      rules.forEach((r) => tb.append(el('tr', {}, el('td', {}, r.name),
+        el('td', { class: 'muted', style: 'font-size:12px' }, `${scopeTxt[r.source_scope_type]}: ${r.source_scope_value || ''}`),
+        el('td', {}, signTxt[r.sign]), el('td', {}, r.level === 'account' ? 'חשבון' : 'סעיף'),
+        el('td', {}, r.target_section_name || r.target_section_code),
+        el('td', {}, r.active ? el('span', { class: 'tag ok' }, 'כן') : el('span', { class: 'tag' }, 'לא')),
+        el('td', {}, canEdit() ? el('span', {}, el('button', { class: 'btn sec sm', onclick: () => ruleDialog(r) }, 'עריכה'), ' ', el('button', { class: 'btn danger sm', onclick: () => delRule(r.id) }, '✕')) : ''))));
+      t.append(tb); rulesCard.append(t);
+    }
+  });
+
+  // ── פקודות מיון (ידני + מיוצר) ──
+  if (canEdit()) m.append(el('div', { class: 'toolbar' }, el('button', { class: 'btn sm', onclick: () => reclassDialog() }, '+ מיון ידני חדש')));
   const wrap = el('div', { class: 'card' }, 'טוען…'); m.append(wrap);
   await guard(async () => {
     const rows = await API.get(`/reclass?version_id=${S.versionId}`);
     wrap.innerHTML = '';
     if (!rows.length) { wrap.textContent = 'אין פקודות מיון בגרסה זו.'; return; }
     const tbl = el('table', { class: 'grid' }, el('thead', {}, el('tr', {},
-      el('th', {}, 'חשבון'), el('th', {}, 'מסעיף'), el('th', {}, 'לסעיף'), el('th', {}, 'הערה'), el('th', { class: 'num' }, 'סכום'), el('th', {}, ''))));
+      el('th', {}, 'מקור'), el('th', {}, 'חשבון'), el('th', {}, 'מסעיף'), el('th', {}, 'לסעיף'), el('th', {}, 'הערה'), el('th', { class: 'num' }, 'סכום'), el('th', {}, ''))));
     const tb = el('tbody');
-    rows.forEach((r) => tb.append(el('tr', {}, el('td', {}, r.account_no || ''), el('td', {}, r.from_section || ''), el('td', {}, r.to_section || ''),
-      el('td', {}, r.note || ''), el('td', { class: 'num' }, nf2.format(Number(r.amount) || 0)),
-      el('td', {}, canEdit() ? el('span', {}, el('button', { class: 'btn sec sm', onclick: () => reclassDialog(r) }, 'עריכה'), ' ', el('button', { class: 'btn danger sm', onclick: () => delRow('reclass', r.id) }, '✕')) : ''))));
+    rows.forEach((r) => {
+      const isRule = r.source === 'rule';
+      tb.append(el('tr', {}, el('td', {}, isRule ? el('span', { class: 'tag warn' }, 'אוטומטי') : el('span', { class: 'tag' }, 'ידני')),
+        el('td', {}, r.account_no || ''), el('td', {}, r.from_section || ''), el('td', {}, r.to_section || ''),
+        el('td', {}, r.note || ''), el('td', { class: 'num' }, nf2.format(Number(r.amount) || 0)),
+        el('td', {}, (canEdit() && !isRule) ? el('span', {}, el('button', { class: 'btn sec sm', onclick: () => reclassDialog(r) }, 'עריכה'), ' ', el('button', { class: 'btn danger sm', onclick: () => delRow('reclass', r.id) }, '✕')) : '')));
+    });
     tbl.append(tb); wrap.append(tbl);
+  });
+}
+function applyRules() { guard(async () => { const r = await API.post('/reclass-rules/apply', { version_id: S.versionId }); toast(`הוחלו ${r.rules} חוקים · נוצרו ${r.generated} מיונים`); render(); }); }
+function delRule(id) { if (!confirm('למחוק את החוק (וגם המיונים שיצר)?')) return; guard(async () => { await API.del(`/reclass-rules/${id}?company_id=${S.companyId}`); render(); }); }
+function ruleDialog(rule) {
+  const name = el('input', { value: rule ? rule.name : '' });
+  const scopeType = el('select', {}); [['subheader', 'כותרת משנה'], ['section', 'סעיף'], ['all', 'הכל']].forEach(([v, l]) => scopeType.append(el('option', { value: v }, l)));
+  if (rule) scopeType.value = rule.source_scope_type;
+  const scopeVal = el('input', { value: rule ? (rule.source_scope_value || '') : 'מזומנים ושווי מזומנים', placeholder: 'טקסט/קוד לזיהוי התחום' });
+  const sign = el('select', {}); [['negative', 'יתרות שליליות'], ['positive', 'יתרות חיוביות'], ['all', 'כל היתרות']].forEach(([v, l]) => sign.append(el('option', { value: v }, l)));
+  if (rule) sign.value = rule.sign;
+  const level = el('select', {}); [['account', 'לפי חשבון'], ['section', 'לפי סעיף']].forEach(([v, l]) => level.append(el('option', { value: v }, l)));
+  if (rule) level.value = rule.level;
+  const tgtCode = el('input', { value: rule ? (rule.target_section_code || '') : '', placeholder: 'קוד סעיף יעד' });
+  const tgtName = el('input', { value: rule ? (rule.target_section_name || '') : 'משיכות יתר', placeholder: 'שם סעיף היעד' });
+  const active = el('input', { type: 'checkbox' }); if (!rule || rule.active) active.checked = true;
+  const body = el('div', {},
+    el('div', { class: 'field' }, el('label', {}, 'שם החוק'), name),
+    el('div', { class: 'field' }, el('label', {}, 'תחום המקור'), scopeType),
+    el('div', { class: 'field' }, el('label', {}, 'ערך התחום (טקסט כותרת-משנה / קוד סעיף)'), scopeVal),
+    el('div', { class: 'field' }, el('label', {}, 'תנאי'), sign),
+    el('div', { class: 'field' }, el('label', {}, 'רמת מיון'), level),
+    el('div', { class: 'field' }, el('label', {}, 'קוד סעיף יעד'), tgtCode),
+    el('div', { class: 'field' }, el('label', {}, 'שם סעיף יעד'), tgtName),
+    el('div', { class: 'field' }, el('label', {}, el('span', {}, active, ' פעיל'))));
+  modal(rule ? 'עריכת חוק מיון' : 'חוק מיון חדש', body, async () => {
+    const payload = { name: name.value, source_scope_type: scopeType.value, source_scope_value: scopeVal.value, sign: sign.value, level: level.value, target_section_code: tgtCode.value, target_section_name: tgtName.value, active: active.checked, company_id: S.companyId };
+    if (!payload.name || !payload.target_section_code) { toast('חסר שם או קוד סעיף יעד', true); return false; }
+    if (rule) await API.patch(`/reclass-rules/${rule.id}`, payload); else await API.post('/reclass-rules', payload);
+    render(); toast('נשמר');
   });
 }
 function reclassDialog(row) {
@@ -747,6 +827,47 @@ async function renderAudit(m) {
       el('td', {}, r.entity), el('td', {}, el('span', { class: 'tag' }, r.action)),
       el('td', { class: 'muted', style: 'font-size:12px; max-width:340px; overflow:hidden; text-overflow:ellipsis' }, (r.after_json || r.before_json || '').slice(0, 120)))));
     tbl.append(tb); wrap.append(tbl);
+  });
+}
+
+/* ═══════════ ניהול חברות ═══════════ */
+async function renderCompanies(m) {
+  m.append(el('h2', { class: 'view-title' }, 'ניהול חברות'));
+  m.append(el('div', { class: 'toolbar' }, el('button', { class: 'btn sm', onclick: () => companyDialog() }, '+ הוסף חברה')));
+  const wrap = el('div', { class: 'card' }, 'טוען…'); m.append(wrap);
+  await guard(async () => {
+    const list = await API.get('/companies');
+    wrap.innerHTML = '';
+    const tbl = el('table', { class: 'grid' }, el('thead', {}, el('tr', {},
+      el('th', {}, 'שם'), el('th', {}, 'קוד'), el('th', {}, 'סוג'), el('th', {}, 'כינויים'), el('th', {}, ''))));
+    const tb = el('tbody');
+    list.forEach((c) => tb.append(el('tr', {},
+      el('td', {}, c.name), el('td', {}, c.code || ''),
+      el('td', {}, c.is_consolidated ? el('span', { class: 'tag' }, 'מאוחד') : 'רגילה'),
+      el('td', { class: 'muted', style: 'font-size:12px' }, (c.aliases || '').replace(/\n/g, ' · ')),
+      el('td', {}, el('button', { class: 'btn sec sm', onclick: () => companyDialog(c) }, 'עריכה')))));
+    tbl.append(tb); wrap.append(tbl);
+  });
+}
+function companyDialog(c) {
+  const name = el('input', { value: c ? c.name : '' });
+  const code = el('input', { value: c ? (c.code || '') : '' });
+  const cons = el('input', { type: 'checkbox' }); if (c && c.is_consolidated) cons.checked = true;
+  const aliases = el('textarea', { rows: 3, placeholder: 'שם חלופי בכל שורה (כפי שמופיע בקובץ הייצוא)' }); aliases.value = c ? (c.aliases || '') : '';
+  const order = el('input', { type: 'number', value: c ? c.sort_order : 0 });
+  const body = el('div', {},
+    el('div', { class: 'field' }, el('label', {}, 'שם החברה'), name),
+    el('div', { class: 'field' }, el('label', {}, 'קוד'), code),
+    el('div', { class: 'field' }, el('label', {}, el('span', {}, cons, ' חברת איחוד (מאוחד)'))),
+    el('div', { class: 'field' }, el('label', {}, 'כינויים (שמות חלופיים)'), aliases),
+    el('div', { class: 'field' }, el('label', {}, 'סדר תצוגה'), order));
+  modal(c ? 'עריכת חברה' : 'חברה חדשה', body, async () => {
+    const payload = { name: name.value, code: code.value, is_consolidated: cons.checked, aliases: aliases.value, sort_order: Number(order.value) || 0 };
+    if (!payload.name) { toast('חסר שם', true); return false; }
+    if (c) await API.patch(`/companies/${c.id}`, payload); else await API.post('/companies', payload);
+    S.companies = await API.get('/companies'); buildContextSelectors();
+    if (!S.companyId && S.companies.length) { S.companyId = S.companies[0].id; await reloadVersions(); }
+    render(); toast('נשמר');
   });
 }
 

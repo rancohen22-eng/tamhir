@@ -4,7 +4,7 @@ const knex = require('../db');
 const { requireAuth, requireCompanyLevel } = require('../middleware/auth');
 const { logChange } = require('../services/audit');
 const { buildFromVersion } = require('../services/build-structure');
-const { memberVersions, memberVersionIds } = require('../services/consolidation');
+const { memberVersions, memberVersionIds, ensureSyntheticLines } = require('../services/consolidation');
 
 // עזר: טעינת גרסת מאוחד + בדיקת הרשאה
 async function withConsolidated(req, res, minLevel, handler) {
@@ -31,13 +31,26 @@ router.get('/:versionId/candidates', requireAuth, (req, res) => withConsolidated
   res.json(rows);
 }));
 
-// הוספת בת
+// הוספת בת (עם שיעור אחזקה ושיטה)
 router.post('/:versionId/members', requireAuth, (req, res) => withConsolidated(req, res, 'edit', async (v) => {
   const memberId = Number(req.body.member_version_id);
   if (!memberId) return res.status(400).json({ error: 'חסרה גרסת בת' });
+  const holding_pct = req.body.holding_pct != null ? Number(req.body.holding_pct) : 100;
+  const method = req.body.method === 'equity' ? 'equity' : 'full';
   const exists = await knex('consolidation_members').where({ consolidated_version_id: v.id, member_version_id: memberId }).first();
-  if (!exists) await knex('consolidation_members').insert({ consolidated_version_id: v.id, member_version_id: memberId });
-  await logChange({ user: req.user, companyId: v.company_id, versionId: v.id }, { entity: 'consolidation', action: 'add-member', after: { memberId } });
+  if (!exists) await knex('consolidation_members').insert({ consolidated_version_id: v.id, member_version_id: memberId, holding_pct, method });
+  else await knex('consolidation_members').where({ id: exists.id }).update({ holding_pct, method });
+  await logChange({ user: req.user, companyId: v.company_id, versionId: v.id }, { entity: 'consolidation', action: 'add-member', after: { memberId, holding_pct, method } });
+  res.json({ ok: true });
+}));
+
+// עדכון אחזקה/שיטה לבת
+router.patch('/:versionId/members/:memberVersionId', requireAuth, (req, res) => withConsolidated(req, res, 'edit', async (v) => {
+  const patch = {};
+  if (req.body.holding_pct != null) patch.holding_pct = Number(req.body.holding_pct);
+  if (req.body.method != null) patch.method = req.body.method === 'equity' ? 'equity' : 'full';
+  await knex('consolidation_members').where({ consolidated_version_id: v.id, member_version_id: req.params.memberVersionId }).update(patch);
+  await logChange({ user: req.user, companyId: v.company_id, versionId: v.id }, { entity: 'consolidation', action: 'update-member', after: patch });
   res.json({ ok: true });
 }));
 
@@ -53,6 +66,16 @@ router.post('/:versionId/build-structure', requireAuth, (req, res) => withConsol
   const sources = await memberVersionIds(v.id);
   if (!sources.length) return res.status(400).json({ error: 'לא הוגדרו חברות בנות למאוחד' });
   const result = await buildFromVersion(v, { rebuild: !!req.body.rebuild, sourceVersionIds: sources, ctx: { user: req.user } });
+  await ensureSyntheticLines(v.company_id); // שורות אקוויטי / זכויות מיעוט
+  // מיפוי כל סעיף מצטבר שאינו ממופה (למשל סעיף יעד ממיוני הבנות)
+  const { computeSectionTotals } = require('../services/report-engine');
+  const { ensureSectionMapped } = require('../services/build-structure');
+  const { parsePrefixed } = require('../services/build-structure');
+  const sections = await computeSectionTotals(v);
+  for (const s of Object.values(sections)) {
+    const n = parsePrefixed(s.mainHeader).num;
+    await ensureSectionMapped(v.company_id, s.code, s.name, (n != null && n <= 3) ? 'balance' : 'pnl');
+  }
   res.json(result);
 }));
 

@@ -121,4 +121,18 @@ async function buildFromVersion(version, { rebuild = false, ctx, sourceVersionId
   return result;
 }
 
-module.exports = { buildFromVersion, parsePrefixed };
+// מוודא שסעיף ממופה לשורת דוח (יוצר שורה + מיפוי אם חסר). statement: 'balance'|'pnl'
+async function ensureSectionMapped(companyId, code, name, statement = 'balance') {
+  const existing = await knex('index_map').where({ company_id: companyId, tb_section_code: code }).first();
+  if (existing && existing.fs_line_id) return existing.fs_line_id;
+  let line = await knex('fs_lines').where({ company_id: companyId, label: name, statement }).first();
+  if (!line) {
+    const [id] = await knex('fs_lines').insert({ company_id: companyId, statement, kind: 'line', label: name, sort_order: 800 });
+    line = { id };
+  }
+  if (existing) await knex('index_map').where({ id: existing.id }).update({ fs_line_id: line.id, tb_section_name: name });
+  else await knex('index_map').insert({ company_id: companyId, tb_section_code: code, tb_section_name: name, fs_line_id: line.id });
+  return line.id;
+}
+
+module.exports = { buildFromVersion, parsePrefixed, ensureSectionMapped };

@@ -32,6 +32,7 @@ app.use('/api/index-map', require('./routes/index-map'));
 app.use('/api/fs-lines', require('./routes/fs-lines'));
 app.use('/api/adjustments', require('./routes/adjustments'));
 app.use('/api/reclass', require('./routes/reclass'));
+app.use('/api/reclass-rules', require('./routes/reclass-rules'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/consolidation', require('./routes/consolidation'));
 app.use('/api/statements', require('./routes/statements'));

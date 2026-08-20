@@ -24,18 +24,46 @@ async function computeSectionTotals(version) {
 
   const company = await knex('companies').where({ id: version.company_id }).first();
   if (company && company.is_consolidated) {
-    // 1(מאוחד). בסיס = צירוף נטו-הסעיפים של גרסאות הבנות (כולל פקודות/מיונים שלהן)
-    const { memberVersionIds } = require('./consolidation');
-    const members = await memberVersionIds(versionId);
-    for (const mid of members) {
-      const memberVersion = await knex('report_versions').where({ id: mid }).first();
-      if (!memberVersion) continue;
-      const memberSections = await computeSectionTotals(memberVersion);
-      Object.values(memberSections).forEach((ms) => {
-        const s = ensure(ms.code, ms.name);
-        s.base += ms.net; s.prior += ms.prior;
-        s.mainHeader = ms.mainHeader; s.subHeader = ms.subHeader;
-      });
+    // 1(מאוחד). בסיס = צירוף גרסאות הבנות לפי שיטה ושיעור אחזקה
+    const { memberDetails, SYNTHETIC } = require('./consolidation');
+    const { parsePrefixed } = require('./build-structure');
+    const mainNum = (h) => parsePrefixed(h).num;
+    const members = await memberDetails(versionId);
+    for (const m of members) {
+      const mv = await knex('report_versions').where({ id: m.member_version_id }).first();
+      if (!mv) continue;
+      const ms = await computeSectionTotals(mv);
+      const pct = (Number(m.holding_pct) || 100) / 100;
+
+      if (m.method === 'equity') {
+        // שיטת השווי המאזני: לא מצרפים שורה-שורה. חלק ברווח + השקעה בלבד.
+        let equityNet = 0; let equityPrior = 0; let pnlNet = 0; let pnlPrior = 0;
+        Object.values(ms).forEach((x) => {
+          const n = mainNum(x.mainHeader);
+          if (n === 3) { equityNet += x.net; equityPrior += x.prior; }
+          if (n >= 4) { pnlNet += x.net; pnlPrior += x.prior; }
+        });
+        // השקעה = pct × הון הבת (סימן ההון שלילי במאזן בוחן → נכס חיובי)
+        const inv = ensure(SYNTHETIC.EQ_INVEST.code, SYNTHETIC.EQ_INVEST.name);
+        inv.base += -pct * equityNet; inv.prior += -pct * equityPrior; inv.mainHeader = '**1.נכסים';
+        // חלק ברווח = pct × (רווח הבת) ; רווח = -(סכום רו"ה)
+        const rslt = ensure(SYNTHETIC.EQ_RESULT.code, SYNTHETIC.EQ_RESULT.name);
+        rslt.base += pct * pnlNet; rslt.prior += pct * pnlPrior; rslt.mainHeader = '**9.מימון';
+      } else {
+        // איחוד מלא: צירוף 100% מהסעיפים
+        Object.values(ms).forEach((x) => {
+          const s = ensure(x.code, x.name);
+          s.base += x.net; s.prior += x.prior;
+          s.mainHeader = x.mainHeader; s.subHeader = x.subHeader;
+        });
+        // זכויות שאינן מקנות שליטה = (1−pct) × הון הבת
+        if (pct < 1) {
+          let equityNet = 0; let equityPrior = 0;
+          Object.values(ms).forEach((x) => { if (mainNum(x.mainHeader) === 3) { equityNet += x.net; equityPrior += x.prior; } });
+          const mi = ensure(SYNTHETIC.MINORITY.code, SYNTHETIC.MINORITY.name);
+          mi.base += (1 - pct) * equityNet; mi.prior += (1 - pct) * equityPrior; mi.mainHeader = '**3.הון עצמי';
+        }
+      }
     }
   } else {
     // 1. בסיס מאזן בוחן
