@@ -1,0 +1,41 @@
+'use strict';
+/*
+ * הגדרות Knex לשתי סביבות:
+ *  - development: SQLite (קובץ מקומי) — לפיתוח ובדיקות ללא תלות בשרת DB.
+ *  - production : Oracle Autonomous Database דרך node-oracledb (Thin mode).
+ *
+ * הלוגיקה זהה בשתי הסביבות (Knex query builder). המעבר לפרודקשן = הגדרת
+ * משתני סביבה בלבד (ראה .env.example).
+ */
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
+
+const migrations = { directory: path.join(__dirname, 'migrations') };
+const seeds = { directory: path.join(__dirname, 'seeds') };
+
+module.exports = {
+  development: {
+    client: 'sqlite3',
+    connection: { filename: process.env.SQLITE_FILE || path.join(__dirname, '..', '..', 'data.dev.sqlite') },
+    useNullAsDefault: true,
+    migrations,
+    seeds,
+    pool: {
+      afterCreate: (conn, cb) => conn.run('PRAGMA foreign_keys = ON', cb),
+    },
+  },
+
+  production: {
+    client: 'oracledb',
+    connection: {
+      user: process.env.ORACLE_USER,
+      password: process.env.ORACLE_PASSWORD,
+      // עבור Autonomous DB: connectString הוא שם ה-TNS מתוך tnsnames.ora שב-wallet,
+      // ו-node-oracledb מוצא את ה-wallet דרך TNS_ADMIN (Thin mode עם mTLS).
+      connectString: process.env.ORACLE_CONNECT_STRING,
+    },
+    migrations,
+    seeds,
+    pool: { min: 2, max: 10 },
+  },
+};

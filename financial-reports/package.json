@@ -1,0 +1,30 @@
+{
+  "name": "arkia-financial-reports",
+  "version": "0.1.0",
+  "description": "מערכת עריכת דוחות כספיים - ארקיע · מחלקת חשבות",
+  "type": "commonjs",
+  "private": true,
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "migrate": "knex --knexfile server/db/knexfile.js migrate:latest",
+    "rollback": "knex --knexfile server/db/knexfile.js migrate:rollback",
+    "seed": "knex --knexfile server/db/knexfile.js seed:run"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "connect-session-knex": "^4.0.0",
+    "cookie-session": "^2.1.0",
+    "dotenv": "^16.4.5",
+    "exceljs": "^4.4.0",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0",
+    "docx": "^8.5.0",
+    "knex": "^3.1.0",
+    "multer": "^1.4.5-lts.1",
+    "sqlite3": "^5.1.7"
+  },
+  "optionalDependencies": {
+    "oracledb": "^6.5.1"
+  }
+}

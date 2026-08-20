@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>דוחות כספיים · ארקיע</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- מסך התחברות -->
+<div id="lock">
+  <div class="panel">
+    <h1>מערכת דוחות כספיים</h1>
+    <p class="dept">ארקיע · מחלקת חשבות</p>
+    <form id="lockForm">
+      <input id="usr" placeholder="שם משתמש" autocomplete="username" autofocus>
+      <input id="pw" type="password" placeholder="סיסמה" autocomplete="current-password">
+      <button class="btn" type="submit" id="unlockBtn" style="width:100%">כניסה</button>
+    </form>
+    <div class="err" id="lockErr"></div>
+  </div>
+</div>
+
+<!-- אפליקציה -->
+<div id="app" class="hidden">
+  <header class="app">
+    <div class="top">
+      <h1>מערכת דוחות כספיים · ארקיע</h1>
+      <div class="spacer"></div>
+      <span class="who" id="who"></span>
+      <button class="btn sec sm" id="logoutBtn">יציאה</button>
+    </div>
+    <!-- הקשר קבוע: חברה / תקופה / גרסה -->
+    <div class="context">
+      <label>חברה:</label>
+      <select id="ctxCompany"></select>
+      <label>תקופה:</label>
+      <select id="ctxPeriod"></select>
+      <label>גרסה:</label>
+      <select id="ctxVersion"></select>
+      <button class="btn sec sm" id="newVersionBtn">גרסה חדשה</button>
+      <button class="btn sec sm" id="cloneVersionBtn">שמור כגרסה</button>
+      <span class="pill" id="ctxLevel"></span>
+    </div>
+    <nav class="tabs" id="tabs"></nav>
+  </header>
+  <main id="main"></main>
+</div>
+
+<script src="api.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
