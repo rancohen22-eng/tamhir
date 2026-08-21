@@ -1,18 +1,20 @@
 'use strict';
 const {
   Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-  WidthType, AlignmentType, BorderStyle, HeadingLevel,
+  WidthType, AlignmentType, BorderStyle, HeadingLevel, PageBreak,
 } = require('docx');
 
-// עיצוב מספר בסגנון הדוח: אלפים עם פסיקים, "-" לאפס, סוגריים לשלילי
-function fmt(v) {
-  const n = Math.round(Number(v) || 0);
+const FONT = 'David';
+
+// עיצוב מספר בסגנון הדוח (אלפי דולר): פסיקים, "-" לאפס, סוגריים לשלילי
+function fmtU(v, units) {
+  const n = Math.round((Number(v) || 0) / (units || 1));
   if (n === 0) return '-';
   const s = Math.abs(n).toLocaleString('en-US');
   return n < 0 ? `(${s})` : s;
 }
 
-function heIso(d) {
+function heDate(d) {
   if (!d) return '';
   const s = String(d).slice(0, 10);
   const [y, m, day] = s.split('-');
@@ -20,181 +22,151 @@ function heIso(d) {
   return `${Number(day)} ב${months[Number(m) - 1]} ${y}`;
 }
 
-function p(text, opts = {}) {
+function P(text, o = {}) {
   return new Paragraph({
-    bidirectional: true,
-    alignment: opts.align || AlignmentType.RIGHT,
-    spacing: opts.spacing || { after: 80 },
-    heading: opts.heading,
-    children: [new TextRun({ text: text || '', bold: opts.bold, size: opts.size, color: opts.color })],
+    bidirectional: true, alignment: o.align || AlignmentType.RIGHT,
+    spacing: o.spacing || { after: 60 }, heading: o.heading,
+    children: [new TextRun({ text: text == null ? '' : String(text), bold: o.bold, size: o.size, color: o.color, italics: o.italics, font: FONT })],
   });
 }
 
-// חישוב עומק שורה בעץ (להזחה)
-function depthMap(lines) {
-  const byId = {}; lines.forEach((l) => { byId[l.id] = l; });
-  const depth = {};
-  const calc = (l) => {
-    if (depth[l.id] != null) return depth[l.id];
-    depth[l.id] = l.parent_id && byId[l.parent_id] ? calc(byId[l.parent_id]) + 1 : 0;
-    return depth[l.id];
-  };
-  lines.forEach(calc);
-  return depth;
-}
+const NO_BORDER = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
+const TOP_LINE = { style: BorderStyle.SINGLE, size: 4, color: '000000' };
+const noBorders = { top: NO_BORDER, bottom: NO_BORDER, left: NO_BORDER, right: NO_BORDER, insideHorizontal: NO_BORDER, insideVertical: NO_BORDER };
 
-function cell(children, width) {
+function cell(children, opts = {}) {
   return new TableCell({
-    width: width ? { size: width, type: WidthType.PERCENTAGE } : undefined,
+    width: opts.width ? { size: opts.width, type: WidthType.PERCENTAGE } : undefined,
+    columnSpan: opts.span, verticalAlign: 'center',
     children: Array.isArray(children) ? children : [children],
   });
 }
-
-function statementTable(lines, period) {
-  const depth = depthMap(lines);
-  const noBorder = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
-  const topBorder = { style: BorderStyle.SINGLE, size: 4, color: '000000' };
-
-  const headerRow = new TableRow({
-    tableHeader: true,
-    children: [
-      cell(p('', { spacing: { after: 0 } }), 46),
-      cell(p('באור', { bold: true, align: AlignmentType.CENTER }), 10),
-      cell(p(`${period.fiscal_year}`, { bold: true, align: AlignmentType.CENTER }), 22),
-      cell(p(`${period.fiscal_year - 1}`, { bold: true, align: AlignmentType.CENTER }), 22),
-    ],
-  });
-
-  const rows = [headerRow];
-  for (const l of lines) {
-    const isHeader = l.kind === 'header';
-    const isTotal = l.kind === 'total';
-    const indent = '  '.repeat(depth[l.id] || 0);
-    const labelPara = new Paragraph({
-      bidirectional: true, alignment: AlignmentType.RIGHT, spacing: { after: 40 },
-      children: [new TextRun({ text: indent + l.label, bold: isHeader || isTotal })],
-    });
-    const numRun = (v) => new Paragraph({
-      alignment: AlignmentType.CENTER, spacing: { after: 40 },
-      children: [new TextRun({ text: isHeader ? '' : fmt(v), bold: isTotal })],
-      border: isTotal ? { top: topBorder } : undefined,
-    });
-    rows.push(new TableRow({
-      children: [
-        cell(labelPara), cell(p(l.note_ref || '', { align: AlignmentType.CENTER })),
-        cell(numRun(l.amount)), cell(numRun(l.prior)),
-      ],
-    }));
-  }
-
-  return new Table({
-    width: { size: 100, type: WidthType.PERCENTAGE },
-    visuallyRightToLeft: true,
-    borders: {
-      top: noBorder, bottom: noBorder, left: noBorder, right: noBorder,
-      insideHorizontal: noBorder, insideVertical: noBorder,
-    },
-    rows,
-  });
+function numPara(text, opts = {}) {
+  return new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 20 },
+    border: opts.top ? { top: TOP_LINE } : undefined,
+    children: [new TextRun({ text: text || '', bold: opts.bold, font: FONT, size: 18 })] });
 }
 
-// טבלת תזרים מזומנים פשוטה (תווית | סכום)
-function cashflowTable(cashflow) {
-  const noBorder = { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' };
-  const topBorder = { style: BorderStyle.SINGLE, size: 4, color: '000000' };
-  const rows = [];
+// עומק שורה בעץ
+function depthMap(lines) {
+  const byId = {}; lines.forEach((l) => { byId[l.id] = l; });
+  const depth = {};
+  const calc = (l) => { if (depth[l.id] != null) return depth[l.id]; depth[l.id] = l.parent_id && byId[l.parent_id] ? calc(byId[l.parent_id]) + 1 : 0; return depth[l.id]; };
+  lines.forEach(calc); return depth;
+}
+
+// טבלת דוח מצב כספי / רו"ה: [תיאור | באור | שוטף | קודם]
+function statementTable(lines, period, units, audited) {
+  const depth = depthMap(lines);
+  const header = new TableRow({ tableHeader: true, children: [
+    cell(P('', { spacing: { after: 0 } }), { width: 46 }),
+    cell(P('באור', { bold: true, align: AlignmentType.CENTER }), { width: 10 }),
+    cell([P('ליום 31 בדצמבר', { bold: true, align: AlignmentType.CENTER, size: 18 }), numPara(String(period.fiscal_year), { bold: true }), P('אלפי דולר', { align: AlignmentType.CENTER, size: 16 }), P(audited ? 'מבוקר' : 'לא מבוקר', { align: AlignmentType.CENTER, size: 16 })], { width: 22 }),
+    cell([P('ליום 31 בדצמבר', { bold: true, align: AlignmentType.CENTER, size: 18 }), numPara(String(period.fiscal_year - 1), { bold: true }), P('אלפי דולר', { align: AlignmentType.CENTER, size: 16 }), P('מבוקר', { align: AlignmentType.CENTER, size: 16 })], { width: 22 }),
+  ] });
+  const rows = [header];
+  for (const l of lines) {
+    const isHeader = l.kind === 'header'; const isTotal = l.kind === 'total';
+    const indent = '  '.repeat(depth[l.id] || 0);
+    rows.push(new TableRow({ children: [
+      cell(new Paragraph({ bidirectional: true, alignment: AlignmentType.RIGHT, spacing: { after: 20 }, children: [new TextRun({ text: indent + l.label, bold: isHeader || isTotal, font: FONT, size: 19 })] })),
+      cell(P(l.note_ref || '', { align: AlignmentType.CENTER, size: 18 })),
+      cell(numPara(isHeader ? '' : fmtU(l.amount, units), { bold: isTotal, top: isTotal })),
+      cell(numPara(isHeader ? '' : fmtU(l.prior, units), { bold: isTotal, top: isTotal })),
+    ] }));
+  }
+  return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, visuallyRightToLeft: true, borders: noBorders, rows });
+}
+
+function cashflowTable(cashflow, period, units) {
+  const rows = [new TableRow({ tableHeader: true, children: [
+    cell(P('', { spacing: { after: 0 } }), { width: 74 }),
+    cell([P(`לשנה שהסתיימה ${period.fiscal_year}`, { bold: true, align: AlignmentType.CENTER, size: 16 }), P('אלפי דולר', { align: AlignmentType.CENTER, size: 15 })], { width: 26 }),
+  ] })];
   cashflow.sections.forEach((sec) => {
     if (!sec.lines.length) return;
-    rows.push(new TableRow({ children: [
-      new TableCell({ width: { size: 75, type: WidthType.PERCENTAGE }, children: [p(sec.label, { bold: true })] }),
-      new TableCell({ children: [p('')] }),
-    ] }));
+    rows.push(new TableRow({ children: [cell(P(sec.label, { bold: true }), { span: 2 })] }));
     sec.lines.forEach((l) => rows.push(new TableRow({ children: [
-      new TableCell({ children: [p((l.is_subtotal ? '' : '   ') + l.label, { bold: l.is_subtotal })] }),
-      new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: fmt(l.value), bold: l.is_subtotal })], border: l.is_subtotal ? { top: topBorder } : undefined })] }),
+      cell(P((l.is_subtotal ? '' : '   ') + l.label, { bold: l.is_subtotal, size: 19 })),
+      cell(numPara(fmtU(l.value, units), { bold: l.is_subtotal, top: l.is_subtotal })),
     ] })));
   });
-  const S = cashflow.subtotals;
-  [['שינוי נטו במזומנים', S.netChange], ['יתרת מזומנים לתחילת התקופה', cashflow.control.openingCash], ['יתרת מזומנים לסוף התקופה', cashflow.control.closingCashActual]]
-    .forEach(([lbl, val]) => rows.push(new TableRow({ children: [
-      new TableCell({ children: [p(lbl, { bold: true })] }),
-      new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: fmt(val), bold: true })], border: { top: topBorder } })] }),
-    ] })));
-  return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, visuallyRightToLeft: true,
-    borders: { top: noBorder, bottom: noBorder, left: noBorder, right: noBorder, insideHorizontal: noBorder, insideVertical: noBorder }, rows });
+  const s = cashflow.subtotals; const c = cashflow.control;
+  [['שינוי נטו במזומנים', s.netChange], ['יתרת מזומנים לתחילת השנה', c.openingCash], ['יתרת מזומנים לסוף השנה', c.closingCashActual]]
+    .forEach(([lbl, v]) => rows.push(new TableRow({ children: [cell(P(lbl, { bold: true })), cell(numPara(fmtU(v, units), { bold: true, top: true }))] })));
+  return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, visuallyRightToLeft: true, borders: noBorders, rows });
 }
 
-// טבלת שינויים בהון (עמודות רכיבים)
-function equityTable(equity) {
-  const border = { style: BorderStyle.SINGLE, size: 2, color: 'CCCCCC' };
+function equityTable(equity, units) {
   const cols = equity.columns;
-  const headCells = [new TableCell({ children: [p('תנועה', { bold: true })] })];
-  cols.forEach((c) => headCells.push(new TableCell({ children: [p(c.label, { bold: true, align: AlignmentType.CENTER, size: 16 })] })));
-  headCells.push(new TableCell({ children: [p('סה"כ', { bold: true, align: AlignmentType.CENTER })] }));
-  const rows = [new TableRow({ tableHeader: true, children: headCells })];
-  const mkRow = (r, bold) => {
-    const cells = [new TableCell({ children: [p(r.label, { bold })] })];
-    cols.forEach((c) => cells.push(new TableCell({ children: [p(fmt(r.values[c.id]), { align: AlignmentType.CENTER, bold })] })));
-    cells.push(new TableCell({ children: [p(fmt(r.values.total), { align: AlignmentType.CENTER, bold })] }));
-    return new TableRow({ children: cells });
-  };
-  rows.push(mkRow(equity.rows[0], true));
-  equity.rows.slice(1).forEach((r) => rows.push(mkRow(r, false)));
-  rows.push(mkRow(equity.closing, true));
+  const grey = { style: BorderStyle.SINGLE, size: 2, color: 'CCCCCC' };
+  const head = [cell(P('', {}))];
+  cols.forEach((c) => head.push(cell(P(c.label, { bold: true, align: AlignmentType.CENTER, size: 15 }))));
+  head.push(cell(P('סה"כ', { bold: true, align: AlignmentType.CENTER })));
+  const rows = [new TableRow({ tableHeader: true, children: head })];
+  const mk = (r, bold) => new TableRow({ children: [cell(P(r.label, { bold, size: 18 })), ...cols.map((c) => cell(numPara(fmtU(r.values[c.id], units), { bold }))), cell(numPara(fmtU(r.values.total, units), { bold }))] });
+  rows.push(mk(equity.rows[0], true));
+  equity.rows.slice(1).forEach((r) => rows.push(mk(r, false)));
+  rows.push(mk(equity.closing, true));
   return new Table({ width: { size: 100, type: WidthType.PERCENTAGE }, visuallyRightToLeft: true,
-    borders: { top: border, bottom: border, left: border, right: border, insideHorizontal: border, insideVertical: border }, rows });
+    borders: { top: grey, bottom: grey, left: grey, right: grey, insideHorizontal: grey, insideVertical: grey }, rows });
 }
 
-async function buildReportDocx({ report, cashflow, equity, company, period, version }) {
+async function buildReportDocx({ report, cashflow, equity, company, period, version, units = 1000, notes = [] }) {
+  const audited = version && version.status === 'final';
+  const consolidated = company && company.is_consolidated;
   const children = [];
 
   // ---- שער ----
-  children.push(p(company.name, { bold: true, size: 32, align: AlignmentType.CENTER, spacing: { after: 200, before: 400 } }));
-  children.push(p('דוחות כספיים' + (company.is_consolidated ? ' מאוחדים' : ''), { bold: true, size: 28, align: AlignmentType.CENTER }));
-  children.push(p(`ליום ${heIso(period.as_of_date)}`, { size: 24, align: AlignmentType.CENTER, spacing: { after: 400 } }));
-  children.push(p(`גרסה: ${version.name} (${version.status === 'final' ? 'סופי' : 'טיוטה'})`, { align: AlignmentType.CENTER, color: '666666' }));
-  children.push(p(`הופק ב-${new Date().toLocaleDateString('he-IL')} · המספרים באלפי דולר`, { align: AlignmentType.CENTER, color: '666666', spacing: { after: 400 } }));
+  children.push(P(company.name, { bold: true, size: 36, align: AlignmentType.CENTER, spacing: { before: 1200, after: 200 } }));
+  children.push(P('דוחות כספיים' + (consolidated ? ' מאוחדים' : ''), { bold: true, size: 30, align: AlignmentType.CENTER, spacing: { after: 100 } }));
+  children.push(P(`ליום ${heDate(period.as_of_date)}`, { size: 26, align: AlignmentType.CENTER, spacing: { after: 100 } }));
+  children.push(P(`(${audited ? 'מבוקר' : 'לא מבוקר'} · אלפי דולר · גרסה: ${version.name})`, { size: 20, align: AlignmentType.CENTER, color: '666666' }));
+  children.push(new Paragraph({ children: [new PageBreak()] }));
 
-  // ---- דוח על המצב הכספי ----
-  children.push(p('דוח על המצב הכספי', { bold: true, size: 26, heading: HeadingLevel.HEADING_1, spacing: { before: 300, after: 120 } }));
-  if (report.balance.length) children.push(statementTable(report.balance, period));
-  else children.push(p('(לא הוגדרו שורות מאזן)', { color: '999999' }));
+  // ---- תוכן עניינים ----
+  children.push(P('תוכן העניינים', { bold: true, size: 24, spacing: { after: 120 } }));
+  ['דוח על המצב הכספי', 'דוח על רווח או הפסד', 'דוח על השינויים בהון', 'דוח על תזרימי המזומנים', 'ביאורים לדוחות הכספיים']
+    .forEach((t, i) => children.push(P(`${i + 1}.  ${t}`, { size: 22 })));
+  children.push(new Paragraph({ children: [new PageBreak()] }));
 
-  // ---- דוח רווח והפסד ----
-  children.push(p('דוח על רווח או הפסד', { bold: true, size: 26, heading: HeadingLevel.HEADING_1, spacing: { before: 400, after: 120 } }));
-  if (report.pnl.length) children.push(statementTable(report.pnl, period));
-  else children.push(p('(לא הוגדרו שורות רווח והפסד)', { color: '999999' }));
+  const section = (title, node) => {
+    children.push(P(title, { bold: true, size: 26, heading: HeadingLevel.HEADING_1, spacing: { before: 300, after: 140 } }));
+    if (node) children.push(node); else children.push(P('(לא הוגדרו שורות)', { color: '999999' }));
+  };
 
-  // ---- דוח על השינויים בהון ----
-  if (equity && equity.columns && equity.columns.length) {
-    children.push(p('דוח על השינויים בהון', { bold: true, size: 26, heading: HeadingLevel.HEADING_1, spacing: { before: 400, after: 120 } }));
-    children.push(equityTable(equity));
-  }
-
-  // ---- דוח על תזרימי המזומנים ----
+  section('דוח על המצב הכספי', report.balance.length ? statementTable(report.balance, period, units, audited) : null);
+  children.push(new Paragraph({ children: [new PageBreak()] }));
+  section('דוח על רווח או הפסד', report.pnl.length ? statementTable(report.pnl, period, units, audited) : null);
+  if (equity && equity.columns && equity.columns.length) { children.push(new Paragraph({ children: [new PageBreak()] })); section('דוח על השינויים בהון', equityTable(equity, units)); }
   if (cashflow && cashflow.sections && cashflow.sections.some((s) => s.lines.length)) {
-    children.push(p('דוח על תזרימי המזומנים', { bold: true, size: 26, heading: HeadingLevel.HEADING_1, spacing: { before: 400, after: 120 } }));
-    children.push(cashflowTable(cashflow));
-    if (!cashflow.control.ok) children.push(p(`⚠ בקרת תזרים: הפרש ${fmt(cashflow.control.diff)} אלפי דולר`, { color: 'B3261E', size: 18 }));
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+    section('דוח על תזרימי המזומנים', cashflowTable(cashflow, period, units));
+    if (!cashflow.control.ok) children.push(P(`⚠ בקרת תזרים: הפרש ${fmtU(cashflow.control.diff, units)} אלפי דולר`, { color: 'B3261E', size: 18 }));
   }
 
-  // ---- סעיפים לא ממופים (אזהרה) ----
+  // ---- ביאורים מילוליים ----
+  if (notes && notes.length) {
+    children.push(new Paragraph({ children: [new PageBreak()] }));
+    children.push(P('ביאורים לדוחות הכספיים', { bold: true, size: 26, heading: HeadingLevel.HEADING_1, spacing: { after: 140 } }));
+    notes.filter((n) => (n.title || n.body)).sort((a, b) => String(a.note_ref).localeCompare(String(b.note_ref), 'he', { numeric: true }))
+      .forEach((n) => {
+        children.push(P(`באור ${n.note_ref}${n.title ? ' — ' + n.title : ''}`, { bold: true, size: 22, spacing: { before: 160, after: 60 } }));
+        String(n.body || '').split(/\r?\n/).forEach((line) => { if (line.trim()) children.push(P(line, { size: 20, spacing: { after: 40 } })); });
+      });
+  }
+
+  // ---- סעיפים לא ממופים ----
   if (report.unmapped && report.unmapped.length) {
-    children.push(p('סעיפי מאזן בוחן שאינם ממופים לשורת דוח:', { bold: true, color: 'B3261E', spacing: { before: 400, after: 80 } }));
-    report.unmapped.slice(0, 40).forEach((u) => {
-      children.push(p(`${u.code} — ${u.name}: ${fmt(u.net)}`, { color: 'B3261E', size: 18 }));
-    });
+    children.push(P('סעיפי מאזן בוחן שאינם ממופים לשורת דוח:', { bold: true, color: 'B3261E', spacing: { before: 300, after: 60 } }));
+    report.unmapped.slice(0, 40).forEach((u) => children.push(P(`${u.code} — ${u.name}: ${fmtU(u.net, units)}`, { color: 'B3261E', size: 16 })));
   }
 
   const doc = new Document({
-    styles: { default: { document: { run: { font: 'David', size: 22 } } } },
-    sections: [{
-      properties: { page: { size: {}, margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 } } },
-      children,
-    }],
+    styles: { default: { document: { run: { font: FONT, size: 20 } } } },
+    sections: [{ properties: { page: { margin: { top: 1000, bottom: 1000, left: 1000, right: 1000 } } }, children }],
   });
-
   return Packer.toBuffer(doc);
 }
 
-module.exports = { buildReportDocx, fmt };
+module.exports = { buildReportDocx, fmtU };

@@ -36,6 +36,7 @@ app.use('/api/reclass-rules', require('./routes/reclass-rules'));
 app.use('/api/reports', require('./routes/reports'));
 app.use('/api/consolidation', require('./routes/consolidation'));
 app.use('/api/statements', require('./routes/statements'));
+app.use('/api/notes', require('./routes/notes'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/audit', require('./routes/audit'));
 

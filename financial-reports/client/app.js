@@ -638,7 +638,7 @@ function delRow(kind, id) { if (!confirm('למחוק?')) return; guard(async () 
 async function renderReport(m) {
   m.append(el('h2', { class: 'view-title' }, 'דוחות ראשיים'), contextBanner());
   const sub = S.stmtTab || 'balance';
-  const subtabs = [['balance', 'מאזן'], ['pnl', 'רווח והפסד'], ['equity', 'שינויים בהון'], ['cashflow', 'תזרים מזומנים']];
+  const subtabs = [['balance', 'מאזן'], ['pnl', 'רווח והפסד'], ['equity', 'שינויים בהון'], ['cashflow', 'תזרים מזומנים'], ['notes', 'ביאורים']];
   const nav = el('div', { class: 'toolbar' });
   subtabs.forEach(([id, lbl]) => nav.append(el('button', { class: 'btn ' + (sub === id ? '' : 'sec') + ' sm', onclick: () => { S.stmtTab = id; render(); } }, lbl)));
   nav.append(el('span', { style: 'flex:1' }));
@@ -662,6 +662,26 @@ async function renderReport(m) {
       wrap.append(statementCard(sub === 'balance' ? 'דוח על המצב הכספי' : 'דוח על רווח או הפסד', sub === 'balance' ? st.balance : st.pnl));
     } else if (sub === 'cashflow') { renderCashflow(wrap, st.cashflow); }
     else if (sub === 'equity') { renderEquity(wrap, st.equity); }
+    else if (sub === 'notes') { await renderNotes(wrap); }
+  });
+}
+async function renderNotes(wrap) {
+  const data = await API.get(`/notes?version_id=${S.versionId}`);
+  const byRef = {}; data.notes.forEach((n) => { byRef[n.note_ref] = n; });
+  const refs = [...new Set([...data.refs, ...data.notes.map((n) => n.note_ref)])].sort((a, b) => String(a).localeCompare(String(b), 'he', { numeric: true }));
+  wrap.append(el('div', { class: 'muted', style: 'font-size:13px;margin-bottom:8px' }, 'הזינו את המלל לכל ביאור — הוא יוזרם לייצוא ה-Word. מספרי הביאורים נלקחים משורות הדוח.'));
+  if (!refs.length) { wrap.append(el('div', { class: 'card' }, 'אין מספרי ביאור מוגדרים בשורות הדוח. הגדירו "מספר באור" ב"מבנה הדוח".')); return; }
+  refs.forEach((ref) => {
+    const n = byRef[ref] || {};
+    const title = el('input', { value: n.title || '', placeholder: 'כותרת הביאור', disabled: canEdit() ? null : 'disabled' });
+    const body = el('textarea', { rows: 4, style: 'width:100%;padding:9px;border:1px solid var(--line);border-radius:8px', placeholder: 'טקסט הביאור…', disabled: canEdit() ? null : 'disabled' }, n.body || '');
+    const card = el('div', { class: 'card' },
+      el('div', { style: 'display:flex;gap:10px;align-items:center;margin-bottom:8px' },
+        el('b', { style: 'color:var(--brand)' }, `באור ${ref}`), title),
+      body);
+    if (canEdit()) card.append(el('div', { class: 'toolbar', style: 'margin-top:8px' },
+      el('button', { class: 'btn sm', onclick: () => guard(async () => { await API.put('/notes', { version_id: S.versionId, note_ref: ref, title: title.value, body: body.value }); toast('הביאור נשמר'); }) }, 'שמירה')));
+    wrap.append(card);
   });
 }
 function unmappedWarn(unmapped) {
@@ -815,7 +835,7 @@ async function drillLine(line) {
   });
 }
 function exportWord() {
-  window.open(`/api/reports/export/word?version_id=${S.versionId}`, '_blank');
+  window.open(`/api/reports/export/word?version_id=${S.versionId}&units=${S.units}`, '_blank');
 }
 
 /* ═══════════ לוג שינויים ═══════════ */

@@ -27,7 +27,9 @@ router.get('/export/word', requireAuth, resolveVersion('view'), async (req, res)
   ]);
   const company = await knex('companies').where({ id: req.version.company_id }).first();
   const period = await knex('periods').where({ id: req.version.period_id }).first();
-  const buffer = await buildReportDocx({ report, cashflow, equity, company, period, version: req.version });
+  const units = Number(req.query.units) || 1000;
+  const notes = await knex('report_notes').where({ version_id: req.version.id }).orderBy(['sort_order', 'note_ref']);
+  const buffer = await buildReportDocx({ report, cashflow, equity, company, period, version: req.version, units, notes });
   const fname = `financial-report-${company.code || company.id}-${period.fiscal_year}.docx`;
   res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
   res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
