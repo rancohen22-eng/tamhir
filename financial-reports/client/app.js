@@ -639,6 +639,9 @@ function delRow(kind, id) { if (!confirm('למחוק?')) return; guard(async () 
 /* ═══════════ IFRS 16 ═══════════ */
 async function renderIFRS16(m) {
   m.append(el('h2', { class: 'view-title' }, 'IFRS 16 — חכירות'), contextBanner());
+  if (canEdit()) m.append(el('div', { class: 'toolbar' },
+    el('button', { class: 'btn sm', onclick: generateIFRS16Entry }, '⚙ ייצר פקודת יומן מההסכמים'),
+    el('span', { class: 'muted', style: 'font-size:12.5px' }, 'מזריק את זכות השימוש, ההתחייבות, הפחת והמימון לדוח (פקודה מאוזנת).')));
   const wrap = el('div', {}, 'טוען…'); m.append(wrap);
   await guard(async () => {
     const d = await API.get(`/ifrs16/${S.versionId}`);
@@ -690,6 +693,14 @@ async function renderIFRS16(m) {
     }
     if (canEdit() && !consView) card.append(el('div', { class: 'toolbar', style: 'margin-top:10px' }, el('button', { class: 'btn sm', onclick: () => ifrs16Dialog() }, '+ הסכם חדש')));
     wrap.append(card);
+  });
+}
+function generateIFRS16Entry() {
+  guard(async () => {
+    const r = await API.post(`/ifrs16/${S.versionId}/generate-entry`, {});
+    if (r.consolidated) toast(`נוצרו פקודות ל-${r.results.length} חברות`);
+    else toast(`נוצרה פקודה (${r.entries} שורות)${r.balanced ? ' — מאוזנת ✓' : ''}`);
+    render();
   });
 }
 function ifrs16Dialog(row) {

@@ -3,7 +3,7 @@ const router = require('express').Router();
 const knex = require('../db');
 const { requireAuth, requireCompanyLevel } = require('../middleware/auth');
 const { logChange } = require('../services/audit');
-const { computeIFRS16, reconcileIFRS16 } = require('../services/ifrs16');
+const { computeIFRS16, reconcileIFRS16, generateIFRS16Entries } = require('../services/ifrs16');
 const { computeReport } = require('../services/report-engine');
 
 async function withVersion(req, res, minLevel, handler) {
@@ -21,6 +21,13 @@ router.get('/:versionId', requireAuth, (req, res) => withVersion(req, res, 'view
   const report = await computeReport(v);
   const recon = await reconcileIFRS16(v, report);
   res.json({ ...data, reconciliation: recon });
+}));
+
+// ייצור פקודת יומן מההסכמים
+router.post('/:versionId/generate-entry', requireAuth, (req, res) => withVersion(req, res, 'edit', async (v) => {
+  const result = await generateIFRS16Entries(v, req.user.id);
+  await logChange({ user: req.user, companyId: v.company_id, versionId: v.id }, { entity: 'ifrs16', action: 'generate-entry', after: result });
+  res.json(result);
 }));
 
 // יצירת הסכם + תנועה
