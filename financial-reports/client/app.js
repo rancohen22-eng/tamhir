@@ -139,6 +139,7 @@ const TABS = [
   { id: 'index', label: 'אינדקס המרה' },
   { id: 'adj', label: 'פקודות נוספות' },
   { id: 'reclass', label: 'פקודות מיון' },
+  { id: 'ifrs16', label: 'IFRS 16' },
   { id: 'report', label: 'דוחות ראשיים' },
   { id: 'audit', label: 'לוג שינויים' },
   { id: 'companies', label: 'חברות', admin: true },
@@ -166,7 +167,7 @@ function render() {
     m.append(el('div', { class: 'card' }, 'בחרו או צרו גרסה כדי להתחיל לעבוד. ', canEdit() ? el('button', { class: 'btn sm', onclick: newVersionDialog }, 'גרסה חדשה') : ''));
     return;
   }
-  ({ tb: renderTB, consolidation: renderConsolidation, structure: renderStructure, index: renderIndex, adj: renderAdjustments, reclass: renderReclass, report: renderReport, audit: renderAudit }[S.tab] || (() => {}))(m);
+  ({ tb: renderTB, consolidation: renderConsolidation, structure: renderStructure, index: renderIndex, adj: renderAdjustments, reclass: renderReclass, ifrs16: renderIFRS16, report: renderReport, audit: renderAudit }[S.tab] || (() => {}))(m);
 }
 
 function contextBanner() {
@@ -635,6 +636,79 @@ function reclassDialog(row) {
 function delRow(kind, id) { if (!confirm('למחוק?')) return; guard(async () => { await API.del(`/${kind}/${id}?version_id=${S.versionId}`); render(); }); }
 
 /* ═══════════ דוחות וביאורים ═══════════ */
+/* ═══════════ IFRS 16 ═══════════ */
+async function renderIFRS16(m) {
+  m.append(el('h2', { class: 'view-title' }, 'IFRS 16 — חכירות'), contextBanner());
+  const wrap = el('div', {}, 'טוען…'); m.append(wrap);
+  await guard(async () => {
+    const d = await API.get(`/ifrs16/${S.versionId}`);
+    wrap.innerHTML = '';
+    const s = d.summary; const r = d.reconciliation;
+    const kv = (label, val) => el('div', { style: 'display:flex;justify-content:space-between;padding:4px 6px' },
+      el('span', {}, label), el('span', { style: 'font-variant-numeric:tabular-nums;direction:ltr;font-weight:600' }, uMoney(val)));
+
+    // סיכום
+    wrap.append(el('div', { class: 'card' }, el('h3', { style: 'margin-top:0;color:var(--brand)' }, 'סיכום IFRS 16'),
+      kv('נכס זכות שימוש (סגירה)', s.asset_closing),
+      kv('התחייבות חכירה (סגירה)', s.liab_closing),
+      kv('  מזה חלות שוטפת (12 ח\')', s.current_portion),
+      kv('  מזה לזמן ארוך', s.long_term),
+      kv('הוצאות פחת (רו"ה)', s.depreciation),
+      kv('הוצאות מימון (רו"ה)', s.interest),
+      d.consolidated ? el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:8px' }, `מאוחד: צירוף ${d.perCompany.length} חברות באיחוד מלא${d.excludedEquity ? ` (לא כולל ${d.excludedEquity} חברות אקוויטי)` : ''}`) : ''));
+
+    // בדיקת התאמה
+    const line = (label, mod, rep, diff) => el('div', { style: 'display:flex;gap:12px;padding:3px 6px' },
+      el('span', { style: 'flex:1' }, label),
+      el('span', { style: 'width:120px;text-align:left;direction:ltr' }, uMoney(mod)),
+      el('span', { style: 'width:120px;text-align:left;direction:ltr;color:var(--muted)' }, uMoney(rep)),
+      el('span', { style: `width:110px;text-align:left;direction:ltr;color:${Math.abs(diff) < 1000 ? 'var(--accent)' : 'var(--warn)'}` }, uMoney(diff)));
+    wrap.append(el('div', { class: 'card' }, el('h3', { style: 'margin-top:0;color:var(--brand)' }, 'בדיקת התאמה לדוח הכספי'),
+      el('div', { style: 'display:flex;gap:12px;padding:3px 6px;font-weight:700;color:var(--muted);font-size:13px' },
+        el('span', { style: 'flex:1' }, ''), el('span', { style: 'width:120px;text-align:left' }, 'מודול'), el('span', { style: 'width:120px;text-align:left' }, 'בדוח'), el('span', { style: 'width:110px;text-align:left' }, 'הפרש')),
+      line('זכות שימוש בנכס (מאזן)', r.rou.module, r.rou.report, r.rou.diff),
+      line('התחייבות בגין חכירה (מאזן)', r.lease.module, r.lease.report, r.lease.diff),
+      el('div', { class: 'muted', style: 'font-size:12.5px;margin-top:6px' }, 'הפחת והמימון מוזנים כפקודה נוספת לרו"ה. אם הדוח כבר כולל את סעיפי החכירה — ההפרש ≈0.')));
+
+    // טבלת הסכמים
+    const consView = d.consolidated;
+    const card = el('div', { class: 'card', style: 'overflow-x:auto' }, el('h3', { style: 'margin-top:0;color:var(--brand)' }, 'הסכמי חכירה'));
+    if (!d.lines.length) card.append(el('div', { class: 'muted' }, 'אין הסכמים. ' + (canEdit() && !consView ? 'הוסיפו הסכם.' : '')));
+    else {
+      const cols = [['name', 'הסכם'], ['liab_open', 'התח\' י.פ'], ['liab_add', 'תוספות'], ['liab_payment', 'פרעון'], ['liab_interest', 'מימון'], ['liab_fx', 'הפ\' שער'], ['liab_closing', 'התח\' י.ס'], ['asset_closing', 'נכס י.ס'], ['asset_depreciation', 'פחת'], ['current_portion', 'חלות שוטפת']];
+      const head = el('tr', {}); cols.forEach(([, l]) => head.append(el('th', { class: 'num' }, l)));
+      const tbl = el('table', { class: 'grid' }, el('thead', {}, head)); const tb = el('tbody');
+      d.lines.forEach((l) => {
+        const tr = el('tr', {});
+        cols.forEach(([k]) => {
+          if (k === 'name') tr.append(el('td', {}, (consView && l.company ? `${l.name} · ${l.company}` : l.name)));
+          else tr.append(el('td', { class: 'num' }, uMoney(l[k])));
+        });
+        tb.append(tr);
+      });
+      tbl.append(tb); card.append(tbl);
+    }
+    if (canEdit() && !consView) card.append(el('div', { class: 'toolbar', style: 'margin-top:10px' }, el('button', { class: 'btn sm', onclick: () => ifrs16Dialog() }, '+ הסכם חדש')));
+    wrap.append(card);
+  });
+}
+function ifrs16Dialog(row) {
+  const f = {};
+  const mk = (key, label, num) => { f[key] = el('input', num ? { type: 'number', step: 'any' } : {}); if (row) f[key].value = row[key] != null ? row[key] : ''; return el('div', { class: 'field' }, el('label', {}, label), f[key]); };
+  const body = el('div', { style: 'display:grid;grid-template-columns:1fr 1fr;gap:0 12px' },
+    mk('name', 'שם ההסכם'), mk('current_portion', 'חלות שוטפת (12ח\')', true),
+    mk('liab_open', 'התחייבות י.פ', true), mk('asset_open', 'נכס י.פ', true),
+    mk('liab_add', 'תוספת התחייבות', true), mk('asset_add', 'תוספת נכס', true),
+    mk('liab_payment', 'פרעון (שלילי)', true), mk('asset_depreciation', 'פחת (שלילי)', true),
+    mk('liab_interest', 'הוצאות מימון', true), mk('liab_fx', 'הפרשי שער', true));
+  modal('הסכם IFRS 16', body, async () => {
+    const payload = { version_id: S.versionId };
+    Object.entries(f).forEach(([k, inp]) => { payload[k] = inp.value; });
+    await API.post(`/ifrs16/${S.versionId}/agreement`, payload);
+    render();
+  });
+}
+
 async function renderReport(m) {
   m.append(el('h2', { class: 'view-title' }, 'דוחות ראשיים'), contextBanner());
   const sub = S.stmtTab || 'balance';
