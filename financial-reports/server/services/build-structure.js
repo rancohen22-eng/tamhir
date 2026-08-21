@@ -66,7 +66,7 @@ async function buildFromVersion(version, { rebuild = false, ctx, sourceVersionId
       if (!line) {
         const [id] = await trx('fs_lines').insert({
           company_id: companyId, statement: mv.statement, parent_id: null,
-          sort_order: (mv.num || 0) * 100, label: mv.label, kind: 'header',
+          sort_order: (mv.num || 0) * 1000, label: mv.label, kind: 'header',
         });
         line = { id, label: mv.label, statement: mv.statement, kind: 'header' };
         existing.push(line);
@@ -83,7 +83,7 @@ async function buildFromVersion(version, { rebuild = false, ctx, sourceVersionId
       if (!line) {
         const [id] = await trx('fs_lines').insert({
           company_id: companyId, statement: mv.statement, parent_id: mainLineId[sv.mainKey] || null,
-          sort_order: (sv.num || 0), label: sv.label, kind: 'line',
+          sort_order: (mv.num || 0) * 1000 + (sv.num || 0), label: sv.label, kind: 'line',
         });
         line = { id, label: sv.label, statement: mv.statement, kind: 'line' };
         existing.push(line);

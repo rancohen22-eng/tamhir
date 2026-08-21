@@ -7,7 +7,9 @@ const S = {
   level: null, // רמת הרשאה לחברה הנוכחית
   tab: 'tb',
   stmtTab: 'balance', // תת-לשונית בדוחות ראשיים
+  units: 1000, // יחידות תצוגה בדוחות: 1000=אלפי דולר, 1=דולר מלא
 };
+const uMoney = (v) => nf.format(Math.round((Number(v) || 0) / S.units));
 
 /* ═══════════ עזרי DOM ═══════════ */
 const $ = (id) => document.getElementById(id);
@@ -640,6 +642,11 @@ async function renderReport(m) {
   const nav = el('div', { class: 'toolbar' });
   subtabs.forEach(([id, lbl]) => nav.append(el('button', { class: 'btn ' + (sub === id ? '' : 'sec') + ' sm', onclick: () => { S.stmtTab = id; render(); } }, lbl)));
   nav.append(el('span', { style: 'flex:1' }));
+  const unitsSel = el('select', { style: 'padding:5px 8px;border-radius:8px;border:1px solid var(--line)' },
+    el('option', { value: 1000 }, 'אלפי דולר'), el('option', { value: 1 }, 'דולר מלא'));
+  unitsSel.value = S.units;
+  unitsSel.onchange = () => { S.units = Number(unitsSel.value); render(); };
+  nav.append(el('span', { class: 'muted', style: 'font-size:13px' }, 'יחידות:'), unitsSel);
   nav.append(el('button', { class: 'btn sec sm', onclick: exportWord }, '⬇ ייצוא ל-Word'));
   m.append(nav);
   const wrap = el('div', {}, 'טוען…'); m.append(wrap);
@@ -696,14 +703,14 @@ function renderCashflow(wrap, cf) {
       const srcTxt = { netprofit: 'רווח נקי', pnl: 'רו"ה', bs_move: 'תנועת מאזן', manual: 'ידני' }[l.source_type] || l.source_type;
       const amtCell = (l.source_type === 'manual' && !l.is_subtotal && canEdit())
         ? el('td', { class: 'num' }, editableNum(l.value, (val) => saveCashflowValue(l.id, val)))
-        : el('td', { class: 'num' }, nf2.format(l.value));
+        : el('td', { class: 'num' }, uMoney(l.value));
       tb.append(el('tr', { class: l.is_subtotal ? 'row-total' : '' },
         el('td', {}, l.label), amtCell,
         el('td', { class: 'num' }, l.cur != null ? nf0fmt(l.cur) : ''),
         el('td', { class: 'num' }, l.open != null ? nf0fmt(l.open) : ''),
         el('td', { class: 'muted', style: 'font-size:12px' }, l.is_subtotal ? '' : srcTxt)));
     });
-    tb.append(el('tr', { class: 'row-total' }, el('td', {}, `סה"כ ${sec.label}`), el('td', { class: 'num' }, nf2.format(sec.total)), el('td', {}), el('td', {}), el('td', {})));
+    tb.append(el('tr', { class: 'row-total' }, el('td', {}, `סה"כ ${sec.label}`), el('td', { class: 'num' }, uMoney(sec.total)), el('td', {}), el('td', {}), el('td', {})));
   });
   tbl.append(tb); card.append(tbl);
 
@@ -729,9 +736,9 @@ function renderCashflow(wrap, cf) {
 }
 function sumRow(label, val, bold) {
   return el('div', { style: `display:flex; justify-content:space-between; padding:3px 4px; ${bold ? 'font-weight:700; border-top:1px solid var(--line)' : ''}` },
-    el('span', {}, label), el('span', { style: 'font-variant-numeric:tabular-nums; direction:ltr' }, nf2.format(val || 0)));
+    el('span', {}, label), el('span', { style: 'font-variant-numeric:tabular-nums; direction:ltr' }, uMoney(val)));
 }
-const nf0fmt = (v) => nf.format(Math.round(Number(v) || 0));
+const nf0fmt = (v) => uMoney(v);
 function editableNum(val, onSave) {
   const inp = el('input', { type: 'number', step: 'any', value: val || 0, style: 'width:120px; text-align:left; direction:ltr' });
   inp.onchange = () => guard(async () => { await onSave(Number(inp.value) || 0); });
@@ -784,8 +791,8 @@ function statementCard(title, lines) {
     const label = el('td', { style: `padding-right:${8 + dep(l) * 16}px` },
       l.kind === 'header' ? l.label : el('span', { class: 'clickable', onclick: () => drillLine(l) }, l.label));
     tb.append(el('tr', { class: cls }, label, el('td', {}, l.note_ref || ''),
-      el('td', { class: 'num' }, l.kind === 'header' ? '' : money(l.amount)),
-      el('td', { class: 'num' }, l.kind === 'header' ? '' : money(l.prior))));
+      el('td', { class: 'num' }, l.kind === 'header' ? '' : uMoney(l.amount)),
+      el('td', { class: 'num' }, l.kind === 'header' ? '' : uMoney(l.prior))));
   });
   tbl.append(tb); card.append(tbl); return card;
 }
