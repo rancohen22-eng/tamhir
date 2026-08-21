@@ -30,9 +30,13 @@ module.exports = {
     connection: {
       user: process.env.ORACLE_USER,
       password: process.env.ORACLE_PASSWORD,
-      // עבור Autonomous DB: connectString הוא שם ה-TNS מתוך tnsnames.ora שב-wallet,
-      // ו-node-oracledb מוצא את ה-wallet דרך TNS_ADMIN (Thin mode עם mTLS).
+      // connectString = שם TNS מתוך tnsnames.ora שב-wallet (למשל arkiafr_high).
       connectString: process.env.ORACLE_CONNECT_STRING,
+      // Thin mode mTLS מול Autonomous DB: תיקיית ה-wallet (מכילה tnsnames.ora +
+      // ewallet.pem) וסיסמת ה-wallet שנקבעה בעת ההורדה מ-OCI.
+      configDir: process.env.TNS_ADMIN,
+      walletLocation: process.env.TNS_ADMIN,
+      walletPassword: process.env.ORACLE_WALLET_PASSWORD || undefined,
     },
     migrations,
     seeds,
