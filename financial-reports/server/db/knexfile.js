@@ -40,6 +40,19 @@ module.exports = {
     },
     migrations,
     seeds,
-    pool: { min: 2, max: 10 },
+    // min:0 — לא לפתוח חיבורים בזמן יצירת ה-pool. הצמדת min>0 גורמת ל-Knex
+    // לנסות לפתוח חיבורים מיד, ולחיצת יד ה-mTLS הראשונה מול Autonomous DB
+    // איטית ולעיתים חורגת מ-acquireConnectionTimeout → KnexTimeoutError
+    // ("operation timed out") עוד לפני שה-migrate מתחיל. עם min:0 החיבור
+    // נפתח עצלן בעת השאילתה הראשונה בפועל.
+    pool: {
+      min: 0,
+      max: 10,
+      // זמן להמתין ליצירת חיבור חדש בתוך ה-pool (ברירת מחדל oracledb: 60ש').
+      acquireTimeoutMillis: 120000,
+      createTimeoutMillis: 120000,
+    },
+    // הזמן ש-Knex ממתין ל-acquire מה-pool לפני KnexTimeoutError.
+    acquireConnectionTimeout: 120000,
   },
 };
