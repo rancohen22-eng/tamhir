@@ -660,7 +660,7 @@ async function renderReport(m) {
       if (sub === 'balance' && st.unmapped && st.unmapped.length) wrap.append(unmappedWarn(st.unmapped));
       wrap.append(el('div', { class: 'muted', style: 'font-size:12.5px;margin-bottom:6px' }, 'לחיצה על שורה פותחת תחקור עד רמת חשבון'));
       wrap.append(statementCard(sub === 'balance' ? 'דוח על המצב הכספי' : 'דוח על רווח או הפסד', sub === 'balance' ? st.balance : st.pnl));
-    } else if (sub === 'cashflow') { renderCashflow(wrap, st.cashflow); }
+    } else if (sub === 'cashflow') { await renderCashflow(wrap); }
     else if (sub === 'equity') { renderEquity(wrap, st.equity); }
     else if (sub === 'notes') { await renderNotes(wrap); }
   });
@@ -703,56 +703,53 @@ function priorDialog() {
   });
 }
 
-/* ── תזרים מזומנים + נייר עבודה + בקרה ── */
-function renderCashflow(wrap, cf) {
-  if (!cf.sections.some((s) => s.lines.length)) {
-    wrap.append(el('div', { class: 'card' }, 'לא הוגדר מבנה תזרים. ',
-      canEdit() ? el('button', { class: 'btn sm', onclick: seedCashflow }, 'זריעת מבנה תזרים ברירת-מחדל') : ''));
-    return;
-  }
-  if (canEdit()) wrap.append(el('div', { class: 'toolbar' }, el('button', { class: 'btn sec sm', onclick: seedCashflow }, 'זריעה מחדש של מבנה התזרים')));
+/* ── תזרים מזומנים — נייר עבודה לפי סעיף (מבנה ההרכבה) ── */
+async function renderCashflow(wrap) {
+  const w = await API.get(`/statements/${S.versionId}/cashflow-worksheet`);
+  const cf = w.cashflow; const c = w.control;
 
-  const card = el('div', { class: 'card' });
-  const tbl = el('table', { class: 'grid' }, el('thead', {}, el('tr', {},
-    el('th', {}, 'סעיף'), el('th', { class: 'num' }, 'סכום'), el('th', { class: 'num' }, 'שוטף'), el('th', { class: 'num' }, 'פתיחה'), el('th', {}, 'מקור'))));
-  const tb = el('tbody');
-  cf.sections.forEach((sec) => {
-    if (!sec.lines.length) return;
-    tb.append(el('tr', { class: 'row-header' }, el('td', { colspan: 5 }, sec.label)));
-    sec.lines.forEach((l) => {
-      const srcTxt = { netprofit: 'רווח נקי', pnl: 'רו"ה', bs_move: 'תנועת מאזן', manual: 'ידני' }[l.source_type] || l.source_type;
-      const amtCell = (l.source_type === 'manual' && !l.is_subtotal && canEdit())
-        ? el('td', { class: 'num' }, editableNum(l.value, (val) => saveCashflowValue(l.id, val)))
-        : el('td', { class: 'num' }, uMoney(l.value));
-      tb.append(el('tr', { class: l.is_subtotal ? 'row-total' : '' },
-        el('td', {}, l.label), amtCell,
-        el('td', { class: 'num' }, l.cur != null ? nf0fmt(l.cur) : ''),
-        el('td', { class: 'num' }, l.open != null ? nf0fmt(l.open) : ''),
-        el('td', { class: 'muted', style: 'font-size:12px' }, l.is_subtotal ? '' : srcTxt)));
-    });
-    tb.append(el('tr', { class: 'row-total' }, el('td', {}, `סה"כ ${sec.label}`), el('td', { class: 'num' }, uMoney(sec.total)), el('td', {}), el('td', {}), el('td', {})));
-  });
-  tbl.append(tb); card.append(tbl);
-
-  // סיכומים
-  const s = cf.subtotals;
-  card.append(el('div', { style: 'margin-top:10px' },
-    sumRow('מזומנים נטו מפעילות שוטפת', s.operating),
-    sumRow('מזומנים נטו מפעילות השקעה', s.investing),
-    sumRow('מזומנים נטו מפעילות מימון', s.financing),
-    sumRow('הפרשי שער על מזומנים', s.fx),
-    sumRow('שינוי נטו במזומנים', s.netChange, true)));
-  wrap.append(card);
+  // דוח תזרים מסוכם
+  wrap.append(el('div', { class: 'card' }, el('h3', { style: 'margin-top:0;color:var(--brand)' }, 'דוח על תזרימי המזומנים'),
+    sumRow('מזומנים נטו מפעילות שוטפת', cf.operating),
+    sumRow('מזומנים נטו מפעילות השקעה', cf.investing),
+    sumRow('מזומנים נטו מפעילות מימון', cf.financing),
+    sumRow('הפרשי שער על מזומנים', cf.fx),
+    sumRow('שינוי נטו במזומנים', cf.netChange, true)));
 
   // בקרה
-  const c = cf.control;
   wrap.append(el('div', { class: 'card', style: `border-color:${c.ok ? 'var(--accent)' : 'var(--danger)'}` },
-    el('h3', { style: `margin-top:0; color:${c.ok ? 'var(--accent)' : 'var(--danger)'}` }, `בקרת תזרים ${c.ok ? '✓ תקין' : '✗ פער'}`),
-    sumRow('יתרת מזומנים לתחילת התקופה', c.openingCash),
-    sumRow('+ שינוי נטו במזומנים', s.netChange),
-    sumRow('= יתרת מזומנים מחושבת', c.closingCashComputed),
-    sumRow('יתרת מזומנים בפועל (מאזן)', c.closingCashActual),
+    el('h3', { style: `margin-top:0;color:${c.ok ? 'var(--accent)' : 'var(--danger)'}` }, `בקרת תזרים ${c.ok ? '✓ תקין' : '✗ פער'}`),
+    sumRow('יתרת מזומנים לתחילת התקופה (מהדוח השנתי הקודם)', c.cashOpening),
+    sumRow('+ שינוי נטו במזומנים', cf.netChange),
+    sumRow('= יתרת מזומנים מחושבת', c.computedClosing),
+    sumRow('יתרת מזומנים בפועל', c.cashClosing),
     sumRow('הפרש בקרה', c.diff, true)));
+
+  // נייר עבודה: הקצאת תנועה לדליי פעילות
+  const wp = el('div', { class: 'card', style: 'overflow-x:auto' },
+    el('h3', { style: 'margin-top:0;color:var(--brand)' }, 'נייר עבודה — הקצאת תנועה לפי פעילות'),
+    el('div', { class: 'muted', style: 'font-size:12.5px;margin-bottom:8px' },
+      w.opening ? `יתרות פתיחה מגרסת: ${w.opening.name}` : 'אין גרסת פתיחה — יתרות פתיחה 0 (הגדירו גרסת השוואה למעלה). ' + 'לכל שורה: פתיחה + הקצאות = סגירה (עמודת בדיקה = 0).'));
+  const buckets = w.buckets;
+  const head = el('tr', {}, el('th', {}, 'סעיף'), el('th', { class: 'num' }, 'פתיחה'), el('th', { class: 'num' }, 'סגירה'), el('th', { class: 'num' }, 'תנועה'));
+  buckets.forEach((b) => head.append(el('th', { class: 'num' }, b.label)));
+  head.append(el('th', { class: 'num' }, 'בדיקה'));
+  const tbl = el('table', { class: 'grid' }, el('thead', {}, head)); const tb = el('tbody');
+  w.lines.forEach((l) => {
+    if (Math.abs(l.movement) < 0.5 && Math.abs(l.opening) < 0.5 && Math.abs(l.closing) < 0.5) return;
+    const tr = el('tr', {});
+    tr.append(el('td', {}, l.label), el('td', { class: 'num' }, uMoney(l.opening)), el('td', { class: 'num' }, uMoney(l.closing)), el('td', { class: 'num' }, uMoney(l.movement)));
+    buckets.forEach((b) => {
+      if (canEdit()) {
+        const inp = el('input', { type: 'number', step: 'any', value: Math.round((l.buckets[b.key] || 0) / S.units), style: 'width:88px;text-align:left;direction:ltr' });
+        inp.onchange = () => guard(async () => { l.buckets[b.key] = Number(inp.value) * S.units; await API.put(`/statements/${S.versionId}/cashflow-alloc`, { fs_line_id: l.id, buckets: l.buckets }); render(); });
+        tr.append(el('td', { class: 'num' }, inp));
+      } else tr.append(el('td', { class: 'num' }, uMoney(l.buckets[b.key])));
+    });
+    tr.append(el('td', { class: 'num', style: Math.abs(l.check) > 1 ? 'color:var(--danger);font-weight:700' : 'color:var(--accent)' }, uMoney(l.check)));
+    tb.append(tr);
+  });
+  tbl.append(tb); wp.append(tbl); wrap.append(wp);
 }
 function sumRow(label, val, bold) {
   return el('div', { style: `display:flex; justify-content:space-between; padding:3px 4px; ${bold ? 'font-weight:700; border-top:1px solid var(--line)' : ''}` },

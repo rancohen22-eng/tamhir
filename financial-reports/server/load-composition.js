@@ -146,7 +146,13 @@ async function main() {
       count++;
     }
     for (let i = 0; i < batch.length; i += 500) await knex('adjustments').insert(batch.slice(i, i + 500));
-    console.log(`  ✓ פקודות נוספות: ${compName} — ${count} פקודות`);
+    // פקודת איזון: פקודות יומן חייבות להסתכם ל-0. אם הפענוח השמיט צד — משלימים plug.
+    const sum = batch.reduce((s, b) => s + b.amount, 0);
+    if (Math.abs(sum) > 1) {
+      await knex('adjustments').insert({ version_id: vid, account_no: null, account_name: 'הפרש איזון פקודות (בדוק בהרכבה)',
+        tb_section_code: '998.הפרשי איזון פקודות', tb_section_name: 'הפרשי איזון פקודות', purpose: 'איזון אוטומטי', amount: -sum });
+      console.log(`  ✓ פקודות נוספות: ${compName} — ${count} פקודות (+ פקודת איזון ${Math.round(-sum).toLocaleString()})`);
+    } else { console.log(`  ✓ פקודות נוספות: ${compName} — ${count} פקודות`); }
   }
 
   // ---------- מיונים ----------

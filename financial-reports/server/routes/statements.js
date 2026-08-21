@@ -8,6 +8,7 @@ const { computeCashflow } = require('../services/cashflow-engine');
 const { computeEquity } = require('../services/equity-engine');
 const { resolveOpeningVersion } = require('../services/comparative');
 const { seedCashflow } = require('../services/seed-cashflow');
+const { computeWorksheet } = require('../services/cashflow-worksheet');
 
 async function withVersion(req, res, minLevel, handler) {
   const id = Number(req.params.versionId || req.body.version_id || req.query.version_id || 0);
@@ -36,6 +37,25 @@ router.post('/:versionId/cashflow/seed', requireAuth, (req, res) => withVersion(
   const r = await seedCashflow(v.company_id, { rebuild: !!req.body.rebuild });
   await logChange({ user: req.user, companyId: v.company_id, versionId: v.id }, { entity: 'cashflow', action: 'seed', after: r });
   res.json(r);
+}));
+
+// נייר עבודה לתזרים לפי סעיף (מבנה ההרכבה)
+router.get('/:versionId/cashflow-worksheet', requireAuth, (req, res) => withVersion(req, res, 'view', async (v) => {
+  res.json(await computeWorksheet(v));
+}));
+
+// שמירת הקצאת תנועה לדליים עבור שורת מאזן (מחליף את כל הדליים לשורה)
+router.put('/:versionId/cashflow-alloc', requireAuth, (req, res) => withVersion(req, res, 'edit', async (v) => {
+  const fsLineId = Number(req.body.fs_line_id);
+  const buckets = req.body.buckets || {};
+  if (!fsLineId) return res.status(400).json({ error: 'חסרה שורה' });
+  await knex.transaction(async (trx) => {
+    await trx('cashflow_allocations').where({ version_id: v.id, fs_line_id: fsLineId }).del();
+    const rows = Object.entries(buckets).filter(([, amt]) => Number(amt)).map(([bucket, amt]) => ({ version_id: v.id, fs_line_id: fsLineId, bucket, amount: Number(amt) || 0 }));
+    if (rows.length) await trx('cashflow_allocations').insert(rows);
+  });
+  await logChange({ user: req.user, companyId: v.company_id, versionId: v.id }, { entity: 'cashflow_alloc', entityId: fsLineId, action: 'update' });
+  res.json({ ok: true });
 }));
 
 // עדכון ערך ידני בשורת תזרים
