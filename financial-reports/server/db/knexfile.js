@@ -81,6 +81,17 @@ module.exports = {
       // זמן להמתין ליצירת חיבור חדש בתוך ה-pool (ברירת מחדל oracledb: 60ש').
       acquireTimeoutMillis: 120000,
       createTimeoutMillis: 120000,
+      // Autonomous DB מפעיל parallel DML כברירת מחדל → ORA-12838 כאשר מנעול
+      // המיגרציה של Knex עושה insert ואז select על אותה טבלה באותה טרנזקציה.
+      // מכבים parallel DML לכל session חדש (גם migrate/seed וגם ריצת השרת).
+      // connection הוא חיבור oracledb ש-Knex עוטף עם executeAsync (מחזיר promise);
+      // done הוא callback node-style ש-Knex מפעיל דרך promisify.
+      afterCreate: (connection, done) => {
+        connection
+          .executeAsync('ALTER SESSION DISABLE PARALLEL DML', [], {})
+          .then(() => done(null, connection))
+          .catch((err) => done(err, connection));
+      },
     },
     // הזמן ש-Knex ממתין ל-acquire מה-pool לפני KnexTimeoutError.
     acquireConnectionTimeout: 120000,
