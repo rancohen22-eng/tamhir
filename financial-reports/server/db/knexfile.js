@@ -13,6 +13,36 @@ require('dotenv').config({ path: path.join(__dirname, '..', '..', '.env') });
 const migrations = { directory: path.join(__dirname, 'migrations') };
 const seeds = { directory: path.join(__dirname, 'seeds') };
 
+// --- תיקון wallet ל-Knex↔Oracle Autonomous (Thin mode) ---
+// ה-dialect של Knex ל-oracledb (acquireRawConnection) בונה מחדש את קונפיג החיבור
+// ומעביר רק user/password/connectString — ומשמיט את שדות ה-wallet
+// (configDir/walletLocation/walletPassword). בלי סיסמת ה-wallet, oracledb לא מצליח
+// לפענח את ewallet.pem, לחיצת היד של ה-mTLS נתקעת, וה-pool נכשל ב-timeout.
+// כאן אנו עוטפים את getConnection של אותו מופע מודול ש-Knex יטען דרך require('oracledb')
+// (נטען פעם אחת ומוחזק ב-cache) ומזריקים בחזרה את שדות ה-wallet מ-.env, כך שהחיבור
+// זהה לבדיקה הגולמית שמצליחה. אידמפוטנטי, מוגן ל-Oracle בלבד, ולא משפיע על פיתוח SQLite.
+if (process.env.ORACLE_USER && process.env.TNS_ADMIN) {
+  try {
+    const oracledb = require('oracledb');
+    if (!oracledb.__walletPatched) {
+      const origGetConnection = oracledb.getConnection.bind(oracledb);
+      oracledb.getConnection = function (cfg, cb) {
+        if (cfg && typeof cfg === 'object' && cfg.walletLocation === undefined) {
+          cfg = Object.assign({}, cfg, {
+            configDir: process.env.TNS_ADMIN,
+            walletLocation: process.env.TNS_ADMIN,
+            walletPassword: process.env.ORACLE_WALLET_PASSWORD || undefined,
+          });
+        }
+        return origGetConnection(cfg, cb);
+      };
+      oracledb.__walletPatched = true;
+    }
+  } catch (e) {
+    // oracledb לא זמין (סביבת SQLite) — מתעלמים
+  }
+}
+
 module.exports = {
   development: {
     client: 'sqlite3',
