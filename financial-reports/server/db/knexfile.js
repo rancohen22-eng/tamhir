@@ -81,14 +81,24 @@ module.exports = {
       // זמן להמתין ליצירת חיבור חדש בתוך ה-pool (ברירת מחדל oracledb: 60ש').
       acquireTimeoutMillis: 120000,
       createTimeoutMillis: 120000,
-      // Autonomous DB מפעיל parallel DML כברירת מחדל → ORA-12838 כאשר מנעול
-      // המיגרציה של Knex עושה insert ואז select על אותה טבלה באותה טרנזקציה.
-      // מכבים parallel DML לכל session חדש (גם migrate/seed וגם ריצת השרת).
+      // הגדרות session לכל חיבור חדש (גם migrate/seed וגם ריצת השרת):
+      //  1) DISABLE PARALLEL DML — Autonomous DB מפעיל parallel DML כברירת מחדל,
+      //     מה שגורם ל-ORA-12838 כאשר מנעול המיגרציה של Knex עושה insert ואז
+      //     select על אותה טבלה באותה טרנזקציה.
+      //  2) NLS_DATE_FORMAT / NLS_TIMESTAMP_FORMAT = ISO — האפליקציה מזינה ומשווה
+      //     תאריכים (as_of_date) כמחרוזות 'YYYY-MM-DD'; בלי זה Oracle משתמש ב-
+      //     NLS ברירת מחדל (DD-MON-RR) וזורק ORA-01861.
       // connection הוא חיבור oracledb ש-Knex עוטף עם executeAsync (מחזיר promise);
       // done הוא callback node-style ש-Knex מפעיל דרך promisify.
       afterCreate: (connection, done) => {
-        connection
-          .executeAsync('ALTER SESSION DISABLE PARALLEL DML', [], {})
+        const stmts = [
+          'ALTER SESSION DISABLE PARALLEL DML',
+          "ALTER SESSION SET NLS_DATE_FORMAT='YYYY-MM-DD'",
+          "ALTER SESSION SET NLS_TIMESTAMP_FORMAT='YYYY-MM-DD HH24:MI:SS'",
+        ];
+        (async () => {
+          for (const s of stmts) await connection.executeAsync(s, [], {});
+        })()
           .then(() => done(null, connection))
           .catch((err) => done(err, connection));
       },
