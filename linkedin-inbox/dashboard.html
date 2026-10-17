@@ -1,0 +1,291 @@
+<title>מרכז פניות LinkedIn</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Assistant:wght@400;600;700&family=Rubik:wght@500;700&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one working column — category counters as filters, status tabs, then a triage list sorted by urgency. */
+:root {
+  --bg: #f3f5f8;
+  --surface: #ffffff;
+  --ink: #16202e;
+  --muted: #5b6878;
+  --line: #dde3ea;
+  --accent: #1d5fa8;
+  --accent-ink: #ffffff;
+  --draft-bg: #eef3f9;
+  --c-lead: #1f8a4c;   --c-lead-bg: #e3f4ea;
+  --c-partner: #1d5fa8; --c-partner-bg: #e2ecf8;
+  --c-recruit: #7a4cc2; --c-recruit-bg: #efe8fa;
+  --c-vendor: #8a6a2c;  --c-vendor-bg: #f6efdf;
+  --c-spam: #7b8591;    --c-spam-bg: #eceff2;
+  --high: #c2412d; --high-bg: #fbe7e3;
+  --font-display: "Rubik", "Assistant", system-ui, sans-serif;
+  --font-body: "Assistant", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0f151d; --surface: #17202b; --ink: #e6ebf1; --muted: #93a0b0; --line: #2a3644;
+  --accent: #6aa6e8; --accent-ink: #0f151d; --draft-bg: #1c2836;
+  --c-lead: #5fcf8d; --c-lead-bg: #173326; --c-partner: #6aa6e8; --c-partner-bg: #182a40;
+  --c-recruit: #b494ec; --c-recruit-bg: #2a2140; --c-vendor: #d5b06a; --c-vendor-bg: #33291a;
+  --c-spam: #8d97a3; --c-spam-bg: #232c37; --high: #f08a76; --high-bg: #3a1f1a;
+  color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0f151d; --surface: #17202b; --ink: #e6ebf1; --muted: #93a0b0; --line: #2a3644;
+  --accent: #6aa6e8; --accent-ink: #0f151d; --draft-bg: #1c2836;
+  --c-lead: #5fcf8d; --c-lead-bg: #173326; --c-partner: #6aa6e8; --c-partner-bg: #182a40;
+  --c-recruit: #b494ec; --c-recruit-bg: #2a2140; --c-vendor: #d5b06a; --c-vendor-bg: #33291a;
+  --c-spam: #8d97a3; --c-spam-bg: #232c37; --high: #f08a76; --high-bg: #3a1f1a;
+  color-scheme: dark }
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 24px 48px;
+}
+.wrap { max-width: 860px; margin: 0 auto; display: grid; gap: 20px; }
+header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 8px 16px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 1.6rem; margin: 0; text-wrap: balance; }
+.run { font-family: var(--font-mono); font-size: .78rem; color: var(--muted); }
+
+.cats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+@media (max-width: 620px) { .cats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.cat {
+  font: inherit; color: inherit; text-align: start; cursor: pointer;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+  display: grid; gap: 2px;
+}
+.cat:hover { border-color: var(--muted); }
+.cat[aria-pressed="true"] { border-color: var(--k); box-shadow: inset 0 0 0 1px var(--k); }
+.cat .n { font-family: var(--font-display); font-weight: 700; font-size: 1.5rem; color: var(--k); font-variant-numeric: tabular-nums; line-height: 1.1; }
+.cat .l { font-size: .85rem; color: var(--muted); }
+
+.tabs { display: flex; flex-wrap: wrap; gap: 6px; border-bottom: 1px solid var(--line); padding-bottom: 8px; }
+.tab { font: inherit; font-weight: 600; font-size: .92rem; color: var(--muted); background: none; border: 0; border-radius: 999px; padding: 4px 12px; cursor: pointer; }
+.tab[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+.tab .c { font-family: var(--font-mono); font-weight: 400; font-size: .8rem; margin-inline-start: 4px; }
+
+.list { display: grid; gap: 12px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
+.card.done { opacity: .62; }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; }
+.who { font-family: var(--font-display); font-weight: 500; font-size: 1.08rem; }
+.role { color: var(--muted); font-size: .92rem; flex-basis: 100%; }
+.pill { font-size: .75rem; font-weight: 700; border-radius: 999px; padding: 1px 9px; background: var(--kb); color: var(--k); white-space: nowrap; }
+.pill.high { background: var(--high-bg); color: var(--high); }
+.pill.kind { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 600; }
+.when { font-family: var(--font-mono); font-size: .75rem; color: var(--muted); margin-inline-start: auto; }
+.summary { margin: 0; }
+.msg { margin: 0; color: var(--muted); font-size: .92rem; border-inline-start: 2px solid var(--line); padding-inline-start: 10px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sugg { margin: 0; font-weight: 600; }
+.sugg span { color: var(--muted); font-weight: 400; }
+.draft { background: var(--draft-bg); border-radius: 8px; padding: 10px 12px; display: grid; gap: 6px; }
+.draft p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.draft .lbl { font-size: .75rem; letter-spacing: .04em; color: var(--muted); font-weight: 700; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn { font: inherit; font-size: .88rem; font-weight: 600; border-radius: 8px; padding: 6px 12px; cursor: pointer; border: 1px solid var(--line); background: var(--surface); color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; }
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn:focus-visible, .cat:focus-visible, .tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn[disabled] { opacity: .5; cursor: default; }
+
+.empty { background: var(--surface); border: 1px dashed var(--line); border-radius: 12px; padding: 28px 20px; color: var(--muted); display: grid; gap: 6px; }
+.empty strong { color: var(--ink); font-family: var(--font-display); font-weight: 500; }
+.notice { font-size: .88rem; color: var(--high); }
+
+.lead    { --k: var(--c-lead);    --kb: var(--c-lead-bg); }
+.partner { --k: var(--c-partner); --kb: var(--c-partner-bg); }
+.recruit { --k: var(--c-recruit); --kb: var(--c-recruit-bg); }
+.vendor  { --k: var(--c-vendor);  --kb: var(--c-vendor-bg); }
+.spam    { --k: var(--c-spam);    --kb: var(--c-spam-bg); }
+@media (prefers-reduced-motion: no-preference) { .card { transition: opacity .2s; } }
+</style>
+
+<div class="wrap" dir="rtl" lang="he">
+  <header>
+    <h1>מרכז פניות LinkedIn</h1>
+    <span class="run" id="run">ממתין לנתונים…</span>
+  </header>
+
+  <div class="cats" id="cats" role="group" aria-label="סינון לפי נושא"></div>
+
+  <div class="tabs" role="tablist" id="tabs"></div>
+
+  <div class="list" id="list">
+    <div class="empty">
+      <strong>הפניות יופיעו כאן</strong>
+      <span>בכל ריצה המערכת קוראת את מיילי LinkedIn ב-Gmail, ממיינת כל פנייה לפי נושא ומוסיפה כאן תקציר, הצעה לפעולה וטיוטת תשובה.</span>
+    </div>
+  </div>
+  <p class="notice" id="notice" hidden></p>
+</div>
+
+<script>
+const CATS = [
+  { id: "lead",    label: "לקוחות והזדמנויות" },
+  { id: "partner", label: "שיתופי פעולה" },
+  { id: "recruit", label: "גיוס" },
+  { id: "vendor",  label: "שיווק אליך" },
+  { id: "spam",    label: "לא רלוונטי" },
+];
+const CAT_ORDER = Object.fromEntries(CATS.map((c, i) => [c.id, i]));
+const STATUSES = [
+  { id: "pending",   label: "ממתינות" },
+  { id: "done",      label: "טופלו" },
+  { id: "dismissed", label: "נדחו" },
+  { id: "all",       label: "הכל" },
+];
+const KIND = { invite: "בקשת חיבור", message: "הודעה", inmail: "InMail" };
+const URG = { high: 0, normal: 1, low: 2 };
+
+let rows = [];
+let db = null;
+let canWrite = true;
+let state = { cat: null, status: "pending" };
+try { const s = JSON.parse(localStorage.getItem("li-view") || "{}"); if (s.status) state.status = s.status; if (s.cat !== undefined) state.cat = s.cat; } catch {}
+const saveView = () => { try { localStorage.setItem("li-view", JSON.stringify(state)); } catch {} };
+
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+
+function fmtWhen(iso) {
+  if (!iso) return "";
+  const d = new Date(iso); if (isNaN(d)) return "";
+  return d.toLocaleString("he-IL", { day: "numeric", month: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+function renderCats() {
+  const box = $("cats"); box.replaceChildren();
+  for (const c of CATS) {
+    const n = rows.filter(r => r.category === c.id && (r.status || "pending") === "pending").length;
+    const b = el("button", "cat " + c.id);
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(state.cat === c.id));
+    b.append(el("span", "n", String(n)), el("span", "l", c.label));
+    b.onclick = () => { state.cat = state.cat === c.id ? null : c.id; saveView(); render(); };
+    box.append(b);
+  }
+}
+
+function renderTabs() {
+  const box = $("tabs"); box.replaceChildren();
+  for (const s of STATUSES) {
+    const n = rows.filter(r => (!state.cat || r.category === state.cat) && (s.id === "all" || (r.status || "pending") === s.id)).length;
+    const b = el("button", "tab", s.label);
+    b.type = "button"; b.setAttribute("role", "tab");
+    b.setAttribute("aria-selected", String(state.status === s.id));
+    b.append(el("span", "c", String(n)));
+    b.onclick = () => { state.status = s.id; saveView(); render(); };
+    box.append(b);
+  }
+}
+
+async function copy(text, btn) {
+  try { await navigator.clipboard.writeText(text); btn.textContent = "הועתק"; }
+  catch {
+    const p = btn.closest(".draft").querySelector("p");
+    const r = document.createRange(); r.selectNodeContents(p);
+    const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+    btn.textContent = "סומן — העתק ידנית";
+  }
+  setTimeout(() => { btn.textContent = "העתק"; }, 1800);
+}
+
+async function setStatus(r, status, btn) {
+  if (!db) return;
+  btn.disabled = true;
+  try { await db.collection("inquiries").doc(r.id).update({ status, handledAt: new Date().toISOString() }); }
+  catch (e) {
+    btn.disabled = false;
+    if (e && e.code === "invalid_argument") { canWrite = false; render(); }
+    else showNotice("העדכון לא נשמר. נסה שוב בעוד רגע.");
+  }
+}
+
+function showNotice(t) { const n = $("notice"); n.textContent = t; n.hidden = false; setTimeout(() => { n.hidden = true; }, 4000); }
+
+function card(r) {
+  const cat = CATS.find(c => c.id === r.category) || CATS[4];
+  const status = r.status || "pending";
+  const c = el("article", "card " + cat.id + (status !== "pending" ? " done" : ""));
+
+  const top = el("div", "top");
+  top.append(el("span", "who", r.name || "ללא שם"));
+  top.append(el("span", "pill", cat.label));
+  if (r.urgency === "high") top.append(el("span", "pill high", "דחוף"));
+  top.append(el("span", "pill kind", KIND[r.kind] || "פנייה"));
+  top.append(el("span", "when", fmtWhen(r.receivedAt)));
+  const role = [r.title, r.company].filter(Boolean).join(" · ");
+  if (role) top.append(el("span", "role", role));
+  c.append(top);
+
+  if (r.summary) c.append(el("p", "summary", r.summary));
+  if (r.text) c.append(el("p", "msg", r.text));
+  if (r.suggestion) { const s = el("p", "sugg"); s.append(el("span", null, "מה לעשות: "), document.createTextNode(r.suggestion)); c.append(s); }
+
+  if (r.draft) {
+    const d = el("div", "draft");
+    const head = el("div", "top");
+    head.append(el("span", "lbl", "טיוטת תשובה"));
+    const cb = el("button", "btn", "העתק"); cb.type = "button"; cb.style.marginInlineStart = "auto";
+    cb.onclick = () => copy(r.draft, cb);
+    head.append(cb);
+    d.append(head, el("p", null, r.draft));
+    c.append(d);
+  }
+
+  const a = el("div", "actions");
+  if (r.linkedinUrl) { const l = el("a", "btn primary", "פתח ב-LinkedIn"); l.href = r.linkedinUrl; l.target = "_blank"; l.rel = "noopener"; a.append(l); }
+  if (r.gmailUrl) { const g = el("a", "btn", "המייל המקורי"); g.href = r.gmailUrl; g.target = "_blank"; g.rel = "noopener"; a.append(g); }
+  if (db && canWrite) {
+    if (status === "pending") {
+      const done = el("button", "btn", "סמן כטופל"); done.type = "button"; done.onclick = () => setStatus(r, "done", done);
+      const dis = el("button", "btn", "דחה"); dis.type = "button"; dis.onclick = () => setStatus(r, "dismissed", dis);
+      a.append(done, dis);
+    } else {
+      const back = el("button", "btn", "החזר לממתינות"); back.type = "button"; back.onclick = () => setStatus(r, "pending", back);
+      a.append(back);
+    }
+  }
+  c.append(a);
+  return c;
+}
+
+function renderList() {
+  const box = $("list");
+  const shown = rows
+    .filter(r => (!state.cat || r.category === state.cat) && (state.status === "all" || (r.status || "pending") === state.status))
+    .sort((x, y) => (URG[x.urgency] ?? 1) - (URG[y.urgency] ?? 1)
+      || (CAT_ORDER[x.category] ?? 9) - (CAT_ORDER[y.category] ?? 9)
+      || String(y.receivedAt || "").localeCompare(String(x.receivedAt || "")));
+  if (!shown.length) {
+    const e = el("div", "empty");
+    e.append(el("strong", null, rows.length ? "אין פניות במסנן הזה" : "עדיין אין פניות"),
+      el("span", null, rows.length ? "נסה נושא או סטטוס אחר." : "הריצה הבאה של המערכת תמלא את הרשימה."));
+    box.replaceChildren(e); return;
+  }
+  box.replaceChildren(...shown.map(card));
+}
+
+function render() { renderCats(); renderTabs(); renderList(); }
+
+render();
+
+(async () => {
+  const use = (n) => (window.claude && window.claude.use ? window.claude.use(n) : Promise.resolve(null));
+  db = await use("db");
+  if (!db) { $("run").textContent = "אין גישה לנתונים בתצוגה הזו"; return; }
+  const user = await use("user");
+  if (user) { const w = await user.can("data.write"); if (w === false) canWrite = false; }
+  db.collection("inquiries").onSnapshot(snap => {
+    rows = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    render();
+  }, () => { $("run").textContent = "החיבור לנתונים נותק — רענן את הדף"; });
+  db.doc("meta/run").onSnapshot(s => {
+    const m = s.exists ? s.data() : null;
+    $("run").textContent = m && m.lastRunAt ? "עודכן " + fmtWhen(m.lastRunAt) : "עוד לא בוצעה ריצה";
+  });
+})();
+</script>
