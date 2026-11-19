@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<title>תיעוד הזמנות טיסות · ארקיע</title>
+<style>
+  :root{
+    --bg:#f2f5f9; --card:#ffffff; --ink:#0e1c2e; --muted:#5b6b7f;
+    --brand:#123a86; --brand2:#1e63b8; --accent:#0e7a4e; --line:#e2e8f0;
+    --danger:#b3261e; --warn:#b26b00; --chip:#e8eff7;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+  html,body{margin:0; padding:0}
+  body{
+    background:var(--bg); color:var(--ink);
+    font-family:-apple-system,"Segoe UI",Roboto,"Heebo",Arial,sans-serif;
+    font-size:15px; line-height:1.45;
+  }
+  .hidden{display:none !important}
+  a{color:var(--brand2)}
+  button{font-family:inherit}
+
+  /* ── מסך התחברות ── */
+  #lock{
+    min-height:100dvh; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; padding:24px;
+    background:linear-gradient(160deg,var(--brand) 0%,var(--brand2) 100%);
+  }
+  #lock .panel{
+    width:100%; max-width:380px; background:var(--card); border-radius:16px;
+    padding:26px 22px; box-shadow:0 10px 30px rgba(0,0,0,.25); text-align:center;
+  }
+  #lock .logo{width:150px; max-width:60%; height:auto; margin:2px auto 10px; display:block}
+  #lock h1{margin:6px 0 2px; font-size:18px; color:var(--brand); font-weight:700}
+  #lock p{margin:0 0 16px; color:var(--muted); font-size:13px}
+  .fld{width:100%; padding:11px 13px; font-size:15px; border:1px solid var(--line);
+    border-radius:10px; margin:6px 0; background:#fff; color:var(--ink)}
+  .fld:focus{outline:2px solid var(--brand2); border-color:transparent}
+  #unlockBtn{width:100%; margin-top:10px; padding:12px; font-size:16px; font-weight:700;
+    color:#fff; background:var(--brand); border:0; border-radius:10px; cursor:pointer}
+  #lockErr{color:var(--danger); font-size:13px; min-height:18px; margin-top:8px}
+  .demo{margin-top:14px; font-size:12px; color:var(--muted); text-align:start; background:var(--chip);
+    border-radius:10px; padding:10px 12px}
+  .demo b{color:var(--brand)}
+  .demo code{background:#fff; padding:1px 5px; border-radius:5px}
+
+  /* ── כותרת ── */
+  header.app{position:sticky; top:0; z-index:20;
+    background:linear-gradient(160deg,var(--brand) 0%,var(--brand2) 100%);
+    color:#fff; padding:10px 14px; box-shadow:0 2px 10px rgba(0,0,0,.15)}
+  header.app .row{display:flex; align-items:center; gap:10px}
+  .logobadge{background:#fff; border-radius:8px; padding:4px 8px; line-height:0;
+    box-shadow:0 1px 4px rgba(0,0,0,.15); flex:0 0 auto}
+  .logobadge img{height:22px; width:auto; display:block}
+  header.app h1{margin:0; font-size:15px; font-weight:700; white-space:nowrap}
+  .spacer{flex:1}
+  .hbtn{color:#fff; background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.4);
+    font-size:13px; font-weight:600; padding:6px 10px; border-radius:8px; cursor:pointer; white-space:nowrap}
+  .hbtn:hover{background:rgba(255,255,255,.28)}
+  .bell{position:relative}
+  .bell .count{position:absolute; top:-6px; inset-inline-end:-6px; background:var(--danger); color:#fff;
+    font-size:11px; font-weight:700; min-width:17px; height:17px; border-radius:9px; padding:0 4px;
+    display:flex; align-items:center; justify-content:center}
+  .whoami{font-size:12px; opacity:.9; white-space:nowrap}
+  nav.tabs{display:flex; gap:4px; overflow-x:auto; margin-top:8px}
+  nav.tabs button{flex:0 0 auto; background:rgba(255,255,255,.14); color:#fff; border:0;
+    padding:7px 12px; border-radius:8px 8px 0 0; font-size:13.5px; cursor:pointer; white-space:nowrap}
+  nav.tabs button.sel{background:var(--bg); color:var(--brand); font-weight:700}
+
+  /* ── תוכן ── */
+  main{max-width:1080px; margin:0 auto; padding:14px}
+  .card{background:var(--card); border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px;
+    box-shadow:0 1px 3px rgba(16,28,46,.05)}
+  .card h2{margin:0 0 10px; font-size:16px; color:var(--brand)}
+  .card h3{margin:14px 0 8px; font-size:14px; color:var(--brand)}
+  .grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px}
+  .kpi{background:var(--chip); border-radius:10px; padding:12px}
+  .kpi .n{font-size:22px; font-weight:800; color:var(--brand)}
+  .kpi .l{font-size:12px; color:var(--muted)}
+  label.f{display:block; font-size:12.5px; color:var(--muted); margin:8px 0 2px; font-weight:600}
+  .btn{background:var(--brand); color:#fff; border:0; padding:9px 15px; border-radius:9px; font-size:14px;
+    font-weight:600; cursor:pointer}
+  .btn:hover{filter:brightness(1.08)}
+  .btn.ghost{background:#fff; color:var(--brand); border:1px solid var(--brand)}
+  .btn.ok{background:var(--accent)}
+  .btn.warn{background:var(--warn)}
+  .btn.danger{background:var(--danger)}
+  .btn.sm{padding:6px 10px; font-size:13px}
+  .btnrow{display:flex; gap:8px; flex-wrap:wrap; margin-top:8px}
+
+  table{width:100%; border-collapse:collapse; font-size:13.5px}
+  th,td{padding:8px 9px; text-align:start; border-bottom:1px solid var(--line); white-space:nowrap}
+  th{color:var(--muted); font-weight:700; font-size:12px; background:#f7fafc; position:sticky; top:0}
+  tbody tr{cursor:pointer}
+  tbody tr:hover{background:#f7fafc}
+  .tablewrap{overflow-x:auto; border:1px solid var(--line); border-radius:10px}
+
+  .badge{display:inline-block; padding:3px 9px; border-radius:999px; font-size:12px; font-weight:700}
+  .st-NEW{background:#eef2f7; color:#425064}
+  .st-AWAITING_QUOTE{background:#fff4e0; color:#8a5a00}
+  .st-QUOTE_RECEIVED{background:#e6f0ff; color:#1e4fa0}
+  .st-APPROVED{background:#e4f5ec; color:#0e7a4e}
+  .st-TICKETED{background:#dff3e7; color:#0a5e3c}
+  .st-CANCEL_REQUESTED{background:#fde8e6; color:#9a2b23}
+  .st-REJECTED{background:#f6e0de; color:#8a231c}
+  .st-CANCELLED{background:#eceff3; color:#5b6b7f}
+
+  .timeline{list-style:none; margin:0; padding:0; position:relative}
+  .timeline li{position:relative; padding:0 22px 14px; border-inline-start:2px solid var(--line); margin-inline-start:6px}
+  .timeline li:last-child{border-color:transparent}
+  .timeline .dot{position:absolute; inset-inline-start:-7px; top:2px; width:12px; height:12px; border-radius:50%;
+    background:var(--brand2); border:2px solid #fff; box-shadow:0 0 0 2px var(--brand2)}
+  .timeline .tl-h{font-weight:700; font-size:13.5px}
+  .timeline .tl-m{font-size:12px; color:var(--muted)}
+  .timeline .tl-note{font-size:12.5px; margin-top:2px}
+
+  .filerow{display:flex; align-items:center; gap:8px; padding:6px 0; font-size:13px}
+  .filerow img{height:38px; border-radius:6px; border:1px solid var(--line)}
+  .cobrand{display:flex; align-items:center; gap:10px; padding:8px 10px; background:var(--chip); border-radius:10px; margin-bottom:10px}
+  .cobrand img{height:30px}
+  .cobrand .x{color:var(--muted)}
+
+  .notif{padding:10px; border-bottom:1px solid var(--line); font-size:13.5px; display:flex; gap:8px; align-items:flex-start}
+  .notif.unread{background:#f0f6ff}
+  .notif .t{font-size:11px; color:var(--muted)}
+
+  .muted{color:var(--muted)}
+  .rowflex{display:flex; gap:14px; flex-wrap:wrap}
+  .rowflex > div{flex:1; min-width:180px}
+  .pill{display:inline-block; background:var(--chip); color:var(--brand); border-radius:999px; padding:2px 9px; font-size:12px; font-weight:600}
+  .checkgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:6px; margin:8px 0}
+  .checkgrid label{display:flex; align-items:center; gap:6px; font-size:13px; background:#f7fafc; padding:6px 8px; border-radius:8px}
+  footer{max-width:1080px; margin:0 auto; padding:8px 14px 26px; font-size:11.5px; color:var(--muted)}
+</style>
+</head>
+<body>
+
+<!-- ══════════ מסך התחברות ══════════ -->
+<div id="lock">
+  <div class="panel">
+    <img class="logo" src="assets/arkia-logo.svg" alt="Arkia" onerror="this.style.display='none'">
+    <h1 id="lk_title">תיעוד הזמנות טיסות</h1>
+    <p id="lk_sub">מערכת פנימית · ארקיע</p>
+    <input id="lk_user" class="fld" placeholder="שם משתמש" autocomplete="username" dir="ltr">
+    <input id="lk_pw" class="fld" type="password" placeholder="סיסמה" autocomplete="current-password" dir="ltr">
+    <button id="unlockBtn">כניסה</button>
+    <div id="lockErr"></div>
+    <div class="demo" id="lk_demo"></div>
+  </div>
+</div>
+
+<!-- ══════════ אפליקציה ══════════ -->
+<div id="appwrap" class="hidden">
+  <header class="app">
+    <div class="row">
+      <span class="logobadge"><img src="assets/arkia-logo.svg" alt="Arkia" onerror="this.parentNode.style.display='none'"></span>
+      <h1 id="app_title">תיעוד הזמנות טיסות</h1>
+      <span class="spacer"></span>
+      <button class="hbtn" id="langBtn" title="Language"></button>
+      <button class="hbtn bell" id="bellBtn">🔔<span class="count hidden" id="bellCount">0</span></button>
+      <span class="whoami" id="whoami"></span>
+      <button class="hbtn" id="logoutBtn"></button>
+    </div>
+    <nav class="tabs" id="tabs"></nav>
+  </header>
+  <main id="app"></main>
+  <footer id="foot"></footer>
+</div>
+
+<script>
+"use strict";
+/* ============================================================================
+   מערכת תיעוד הזמנות טיסות (ארקיע)
+   אפליקציית חזית עובדת (קובץ יחיד) הממפה את סכמת ה-Oracle שב-bookings/db/.
+   נתונים נשמרים ב-localStorage של הדפדפן (MVP). לחיבור רב-משתמשי אמיתי —
+   ראו bookings/db + bookings/apex/BUILD_GUIDE.md.
+   ========================================================================== */
+
+const LS_KEY = "arkia_bookings_v1";
+
+/* ── סטטוסים (label דו-לשוני) ── */
+const STATUSES = {
+  NEW:              {he:"נפתחה",            en:"New",              terminal:false},
+  AWAITING_QUOTE:   {he:"ממתין להצעת מחיר", en:"Awaiting Quote",   terminal:false},
+  QUOTE_RECEIVED:   {he:"הצעה התקבלה",      en:"Quote Received",   terminal:false},
+  APPROVED:         {he:"אושר",             en:"Approved",         terminal:false},
+  TICKETED:         {he:"כורטס",            en:"Ticketed",         terminal:true},
+  CANCEL_REQUESTED: {he:"בקשת ביטול",       en:"Cancel Requested", terminal:false},
+  REJECTED:         {he:"נדחה",             en:"Rejected",         terminal:true},
+  CANCELLED:        {he:"בוטל",             en:"Cancelled",        terminal:true},
+};
+
+/* ── תבניות התראה (סטטוס × תפקיד נמען) ── */
+const NOTIF = {
+  AWAITING_QUOTE:   [["AGENT",     {he:"בקשה חדשה להצעת מחיר עבור הזמנה #%ID%.", en:"New quote request for booking #%ID%."}]],
+  QUOTE_RECEIVED:   [["INITIATOR", {he:"הסוכן הגיש הצעת מחיר עבור הזמנה #%ID%.", en:"The agent submitted a quote for booking #%ID%."}]],
+  APPROVED:         [["AGENT",     {he:"הזמנה #%ID% אושרה — ניתן לכרטס.",       en:"Booking #%ID% approved — you may ticket."}],
+                     ["INITIATOR", {he:"הזמנה #%ID% אושרה ע\"י הגורם המאשר.",    en:"Booking #%ID% was approved."}]],
+  REJECTED:         [["INITIATOR", {he:"הזמנה #%ID% נדחתה.",                     en:"Booking #%ID% was rejected."}],
+                     ["AGENT",     {he:"הזמנה #%ID% נדחתה.",                     en:"Booking #%ID% was rejected."}]],
+  TICKETED:         [["INITIATOR", {he:"הזמנה #%ID% כורטסה. מסמך הכרטוס זמין.",  en:"Booking #%ID% ticketed. Document available."}],
+                     ["APPROVER",  {he:"הזמנה #%ID% כורטסה.",                    en:"Booking #%ID% was ticketed."}]],
+  CANCEL_REQUESTED: [["AGENT",     {he:"התקבלה בקשת ביטול עבור הזמנה #%ID% — נדרש אישורך.", en:"Cancellation requested for booking #%ID% — confirmation required."}],
+                     ["APPROVER",  {he:"הוגשה בקשת ביטול עבור הזמנה #%ID%.",     en:"Cancellation requested for booking #%ID%."}]],
+  CANCELLED:        [["INITIATOR", {he:"ביטול הזמנה #%ID% אושר ע\"י הסוכן.",     en:"Cancellation of booking #%ID% confirmed by agent."}],
+                     ["APPROVER",  {he:"ביטול הזמנה #%ID% אושר ע\"י הסוכן.",     en:"Cancellation of booking #%ID% confirmed by agent."}]],
+};
+
+/* ── מילון ממשק ── */
+const T = {
+  he:{ title:"תיעוד הזמנות טיסות", logout:"יציאה", bookings:"הזמנות", newBooking:"הזמנה חדשה",
+    finance:"כספים", admin:"ניהול", notifications:"התראות", dept:"מחלקה", status:"סטטוס",
+    initiator:"מזמין", agent:"סוכן", approver:"מאשר", openDate:"תאריך פתיחה", departure:"תאריך יציאה",
+    ticketingDate:"תאריך כרטוס", price:"מחיר", currency:"מטבע", pnr:"PNR", uref:"מזהה חד-ערכי",
+    all:"הכל", none:"—", save:"שמירה", cancel:"ביטול", back:"חזרה", details:"פירוט הזמנה",
+    timeline:"מעקב סטטוסים", files:"מסמכים", who:"מבצע", when:"מתי", note:"הערה", reason:"סיבה",
+    tripDetails:"פרטי נסיעה", quoteNotes:"הערות להצעה", sendToAgent:"שלח לסוכן", submitQuote:"הגש הצעת מחיר",
+    approve:"אשר", reject:"דחה", ticket:"כרטס", requestCancel:"בקש ביטול", confirmCancel:"אשר ביטול",
+    uploadScreenshot:"צילום ממערכת ההזמנות", uploadTicket:"מסמך/תמונת כרטוס", noBookings:"אין הזמנות להצגה",
+    markRead:"סמן הכל כנקרא", noNotif:"אין התראות", exportExcel:"ייצוא לאקסל (CSV)", total:"סה\"כ הזמנות",
+    reportBuilder:"מחולל טמפלט דוחות", templateName:"שם הטמפלט", selectFields:"בחר שדות", createTemplate:"צור טמפלט",
+    runTemplate:"הרץ", myTemplates:"הטמפלטים שלי", shared:"משותף", departments:"מחלקות", users:"משתמשים",
+    agents:"סוכנים", currencies:"מטבעות", approvers:"גורמים מאשרים", name:"שם", email:"אימייל", roles:"תפקידים",
+    active:"פעיל", agency:"סוכנות", logo:"לוגו", add:"הוסף", byDept:"לפי מחלקה", byStatus:"לפי סטטוס",
+    estPrice:"מחיר משוער", chooseAgent:"בחר סוכן", required:"שדה חובה", saved:"נשמר", open:"פתוחות",
+    ticketed:"כורטסו", cancelled:"בוטלו", search:"חיפוש...", lang:"עברית", createdBy:"נפתחה ע\"י", actions:"פעולות",
+    welcome:"ברוך הבא", role_ADMIN:"מנהל מערכת", role_INITIATOR:"מזמין", role_APPROVER:"גורם מאשר",
+    role_AGENT:"סוכן", role_FINANCE:"כספים", changePw:"שנה סיסמה", download:"הורדה", view:"צפייה",
+    quoteBy:"הצעה מהסוכן", ticketInfo:"פרטי כרטוס", cobrandNote:"בשיתוף הסוכן" },
+  en:{ title:"Flight Booking Documentation", logout:"Logout", bookings:"Bookings", newBooking:"New Booking",
+    finance:"Finance", admin:"Admin", notifications:"Notifications", dept:"Department", status:"Status",
+    initiator:"Initiator", agent:"Agent", approver:"Approver", openDate:"Open Date", departure:"Departure",
+    ticketingDate:"Ticketing Date", price:"Price", currency:"Currency", pnr:"PNR", uref:"Unique Ref",
+    all:"All", none:"—", save:"Save", cancel:"Cancel", back:"Back", details:"Booking Details",
+    timeline:"Status Timeline", files:"Documents", who:"By", when:"When", note:"Note", reason:"Reason",
+    tripDetails:"Trip Details", quoteNotes:"Quote Notes", sendToAgent:"Send to Agent", submitQuote:"Submit Quote",
+    approve:"Approve", reject:"Reject", ticket:"Ticket", requestCancel:"Request Cancel", confirmCancel:"Confirm Cancel",
+    uploadScreenshot:"Booking-system screenshot", uploadTicket:"Ticket document/image", noBookings:"No bookings to show",
+    markRead:"Mark all read", noNotif:"No notifications", exportExcel:"Export to Excel (CSV)", total:"Total bookings",
+    reportBuilder:"Report Template Builder", templateName:"Template name", selectFields:"Select fields", createTemplate:"Create template",
+    runTemplate:"Run", myTemplates:"My templates", shared:"Shared", departments:"Departments", users:"Users",
+    agents:"Agents", currencies:"Currencies", approvers:"Approvers", name:"Name", email:"Email", roles:"Roles",
+    active:"Active", agency:"Agency", logo:"Logo", add:"Add", byDept:"By department", byStatus:"By status",
+    estPrice:"Estimated price", chooseAgent:"Choose agent", required:"Required", saved:"Saved", open:"Open",
+    ticketed:"Ticketed", cancelled:"Cancelled", search:"Search...", lang:"English", createdBy:"Opened by", actions:"Actions",
+    welcome:"Welcome", role_ADMIN:"Administrator", role_INITIATOR:"Initiator", role_APPROVER:"Approver",
+    role_AGENT:"Agent", role_FINANCE:"Finance", changePw:"Change password", download:"Download", view:"View",
+    quoteBy:"Agent quote", ticketInfo:"Ticket info", cobrandNote:"With agent" },
+};
+
+/* ── מצב ── */
+let DB = null;
+let SES = { uid:null, lang:"he", tab:"bookings", bookingId:null };
+
+function t(k){ return (T[SES.lang]||T.he)[k] || k; }
+function stLabel(code){ return (STATUSES[code]||{})[SES.lang] || code; }
+function uid(){ return Date.now().toString(36)+Math.random().toString(36).slice(2,7); }
+
+/* ── seed ── */
+function seed(){
+  const dep = (code,he,en)=>({id:uid(),code,name_he:he,name_en:en,active:true});
+  const departments=[dep("ACMI","ACMI","ACMI"),dep("INTERLINE","אינטרליין","Interline"),
+                     dep("COMMERCE","מסחר","Commerce"),dep("AGENTS","סוכנים","Agents")];
+  const dById = c=>departments.find(d=>d.code===c).id;
+  const usr=(un,fn,em,dc,roles,lang)=>({id:uid(),username:un,full_name:fn,email:em,
+    dept_id:dc?dById(dc):null,roles,pref_lang:lang||"HE",active:true,password:"Arkia2026!"});
+  const users=[
+    usr("admin","מנהל מערכת","admin@arkia.example",null,["ADMIN"]),
+    usr("initiator_acmi","יוזם ACMI","initiator.acmi@arkia.example","ACMI",["INITIATOR"]),
+    usr("approver_acmi","מאשר ACMI","approver.acmi@arkia.example","ACMI",["APPROVER"]),
+    usr("finance","משתמש כספים","finance@arkia.example",null,["FINANCE"]),
+    usr("teltos","טלטוס - סוכן נסיעות","agent@teltos.example","AGENTS",["AGENT"]),
+  ];
+  const uByName=n=>users.find(u=>u.username===n).id;
+  const agents=[{id:uid(),user_id:uByName("teltos"),agency_name:"טלטוס - מנועי חיפוש טיסות",
+    logo:"assets/teltos-logo.jpeg"}];
+  const approvers=[{dept_id:dById("ACMI"),user_id:uByName("approver_acmi")}];
+  const currencies=[
+    {code:"USD",name_he:"דולר אמריקאי",name_en:"US Dollar",symbol:"$",is_default:true},
+    {code:"EUR",name_he:"אירו",name_en:"Euro",symbol:"€",is_default:false},
+    {code:"ILS",name_he:"שקל חדש",name_en:"Israeli Shekel",symbol:"₪",is_default:false},
+    {code:"GBP",name_he:"לירה שטרלינג",name_en:"British Pound",symbol:"£",is_default:false},
+  ];
+  return {departments,users,agents,approvers,currencies,bookings:[],notifications:[],templates:[]};
+}
+
+function load(){
+  try{ DB = JSON.parse(localStorage.getItem(LS_KEY)); }catch(e){ DB=null; }
+  if(!DB || !DB.users){ DB = seed(); save(); }
+}
+function save(){ localStorage.setItem(LS_KEY, JSON.stringify(DB)); }
+
+/* ── עזרי ישויות ── */
+const U  = id => DB.users.find(u=>u.id===id);
+const D  = id => DB.departments.find(d=>d.id===id);
+const AG = id => DB.agents.find(a=>a.id===id);
+const CUR= code => DB.currencies.find(c=>c.code===code);
+function me(){ return U(SES.uid); }
+function hasRole(r){ const u=me(); return u && u.roles.includes(r); }
+function deptName(id){ const d=D(id); if(!d) return t("none"); return SES.lang==="en"?(d.name_en||d.name_he):d.name_he; }
+function userName(id){ const u=U(id); return u?u.full_name:t("none"); }
+function agencyName(id){ const a=AG(id); return a?a.agency_name:t("none"); }
+function agentByUser(userId){ return DB.agents.find(a=>a.user_id===userId); }
+function deptApprover(deptId){ const a=DB.approvers.find(x=>x.dept_id===deptId); return a?a.user_id:null; }
+
+/* ── התראות + מעבר סטטוס (מקביל ל-booking_pkg.change_status) ── */
+function pushNotif(userId,bookingId,statusCode,tmpl){
+  const u=U(userId); if(!u||!u.active) return;
+  const lang=(u.pref_lang||"HE").toLowerCase();
+  const msg=(tmpl[lang]||tmpl.he).replace("%ID%",String(bookingId));
+  DB.notifications.push({id:uid(),user_id:userId,booking_id:bookingId,type:statusCode,message:msg,is_read:false,at:Date.now()});
+  /* מייל אמיתי נשלח בבק-אנד (APEX_MAIL); כאן פעמון בלבד */
+}
+function changeStatus(b,newStatus,note){
+  const from=b.status; b.status=newStatus; b.updated_at=Date.now();
+  b.log.push({from,to:newStatus,by:SES.uid,at:Date.now(),note:note||null});
+  (NOTIF[newStatus]||[]).forEach(([role,tmpl])=>{
+    if(role==="AGENT"){ const a=AG(b.agent_id); if(a) pushNotif(a.user_id,b.id,newStatus,tmpl); }
+    else if(role==="INITIATOR"){ if(b.initiator_id) pushNotif(b.initiator_id,b.id,newStatus,tmpl); }
+    else if(role==="APPROVER"){
+      const ap=b.approver_id||deptApprover(b.dept_id);
+      if(ap) pushNotif(ap,b.id,newStatus,tmpl);
+    }
+  });
+  save();
+}
+function bookingSeq(){ return (DB.bookings.length?Math.max(...DB.bookings.map(b=>b.seq||0)):0)+1; }
+
+/* ── קבצים ── */
+function readFileAsDataURL(file){
+  return new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+}
+
+/* ══════════ התחברות ══════════ */
+function renderLock(){
+  document.getElementById("lk_title").textContent=t("title");
+  document.getElementById("lk_demo").innerHTML =
+    '<b>משתמשי דמו</b> (סיסמה <code>Arkia2026!</code>):<br>'+
+    'admin · initiator_acmi · approver_acmi · finance · teltos';
+}
+function doLogin(){
+  const un=document.getElementById("lk_user").value.trim().toLowerCase();
+  const pw=document.getElementById("lk_pw").value;
+  const u=DB.users.find(x=>x.username.toLowerCase()===un && x.active);
+  if(!u || u.password!==pw){ document.getElementById("lockErr").textContent="שם משתמש או סיסמה שגויים / Invalid credentials"; return; }
+  SES.uid=u.id; SES.lang=(u.pref_lang||"HE").toLowerCase();
+  SES.tab = hasRole("AGENT")?"bookings":(hasRole("FINANCE")&&!hasRole("INITIATOR")?"finance":"bookings");
+  document.getElementById("lock").classList.add("hidden");
+  document.getElementById("appwrap").classList.remove("hidden");
+  applyLang(); render();
+}
+function logout(){ SES.uid=null; document.getElementById("appwrap").classList.add("hidden");
+  document.getElementById("lock").classList.remove("hidden");
+  document.getElementById("lk_user").value=""; document.getElementById("lk_pw").value=""; document.getElementById("lockErr").textContent=""; }
+
+/* ══════════ שפה ══════════ */
+function applyLang(){
+  document.documentElement.lang = SES.lang==="en"?"en":"he";
+  document.documentElement.dir  = SES.lang==="en"?"ltr":"rtl";
+  document.getElementById("app_title").textContent=t("title");
+  document.getElementById("langBtn").textContent = SES.lang==="en"?"🇮🇱 עברית":"🇺🇸 English";
+  document.getElementById("logoutBtn").textContent=t("logout");
+}
+function toggleLang(){
+  SES.lang = SES.lang==="en"?"he":"en";
+  const u=me(); if(u){ u.pref_lang=SES.lang.toUpperCase(); save(); }
+  applyLang(); render();
+}
+
+/* ══════════ ניווט ══════════ */
+function tabsFor(){
+  const tabs=[];
+  if(hasRole("INITIATOR")||hasRole("APPROVER")||hasRole("AGENT")||hasRole("ADMIN")||hasRole("FINANCE")) tabs.push(["bookings",t("bookings")]);
+  if(hasRole("INITIATOR")) tabs.push(["new",t("newBooking")]);
+  if(hasRole("FINANCE")||hasRole("ADMIN")) tabs.push(["finance",t("finance")]);
+  if(hasRole("ADMIN")) tabs.push(["admin",t("admin")]);
+  return tabs;
+}
+function render(){
+  // כותרת
+  document.getElementById("whoami").textContent = me().full_name;
+  const unread=DB.notifications.filter(n=>n.user_id===SES.uid && !n.is_read).length;
+  const bc=document.getElementById("bellCount");
+  bc.textContent=unread; bc.classList.toggle("hidden",unread===0);
+  // טאבים
+  const nav=document.getElementById("tabs"); nav.innerHTML="";
+  tabsFor().forEach(([k,lbl])=>{ const b=document.createElement("button");
+    b.textContent=lbl; b.className=SES.tab===k?"sel":""; b.onclick=()=>{SES.tab=k; SES.bookingId=null; render();}; nav.appendChild(b); });
+  document.getElementById("foot").textContent =
+    (SES.lang==="en"?"Internal use · Arkia · data stored locally in this browser (MVP)":"לשימוש פנימי · ארקיע · הנתונים נשמרים מקומית בדפדפן (גרסת MVP)");
+  // תוכן
+  const app=document.getElementById("app");
+  if(SES.tab==="notifications") return renderNotifications(app);
+  if(SES.bookingId) return renderDetail(app,SES.bookingId);
+  switch(SES.tab){
+    case "bookings": return renderBookings(app);
+    case "new":      return renderNew(app);
+    case "finance":  return renderFinance(app);
+    case "admin":    return renderAdmin(app);
+    default:         return renderBookings(app);
+  }
+}
+
+/* ══════════ רשימת הזמנות ══════════ */
+function visibleBookings(){
+  const u=me();
+  let list=DB.bookings.slice().sort((a,b)=>b.seq-a.seq);
+  if(hasRole("ADMIN")||hasRole("FINANCE")) return list;
+  if(hasRole("AGENT")){ const a=agentByUser(u.id); return a?list.filter(b=>b.agent_id===a.id):[]; }
+  // מזמין/מאשר — כל הזמנות המחלקה
+  return list.filter(b=>b.dept_id===u.dept_id);
+}
+function renderBookings(app){
+  const list=visibleBookings();
+  app.innerHTML=`<div class="card">
+    <h2>${t("bookings")}</h2>
+    <input id="bkSearch" class="fld" placeholder="${t("search")}" oninput="filterBk()">
+    <div class="tablewrap" style="margin-top:10px"><table id="bkTable"><thead><tr>
+      <th>#</th><th>${t("status")}</th><th>${t("dept")}</th><th>${t("initiator")}</th>
+      <th>${t("agent")}</th><th>${t("departure")}</th><th>${t("price")}</th><th>${t("pnr")}</th>
+    </tr></thead><tbody>${list.map(rowBk).join("")||`<tr><td colspan="8" class="muted">${t("noBookings")}</td></tr>`}</tbody></table></div>
+  </div>`;
+}
+function rowBk(b){
+  const cur=CUR(b.currency);
+  return `<tr onclick="openBk('${b.id}')">
+    <td>${b.seq}</td>
+    <td><span class="badge st-${b.status}">${stLabel(b.status)}</span></td>
+    <td>${deptName(b.dept_id)}</td>
+    <td>${userName(b.initiator_id)}</td>
+    <td>${b.agent_id?agencyName(b.agent_id):t("none")}</td>
+    <td>${b.departure_date||t("none")}</td>
+    <td>${b.price!=null?(cur?cur.symbol:"")+Number(b.price).toLocaleString():t("none")}</td>
+    <td>${b.pnr||t("none")}</td></tr>`;
+}
+function filterBk(){
+  const q=document.getElementById("bkSearch").value.toLowerCase();
+  document.querySelectorAll("#bkTable tbody tr").forEach(tr=>{
+    tr.style.display = tr.textContent.toLowerCase().includes(q)?"":"none";
+  });
+}
+function openBk(id){ SES.bookingId=id; render(); }
+
+/* ══════════ הזמנה חדשה ══════════ */
+function renderNew(app){
+  const u=me();
+  const agentOpts=DB.agents.map(a=>`<option value="${a.id}">${a.agency_name}</option>`).join("");
+  const curOpts=DB.currencies.map(c=>`<option value="${c.code}" ${c.is_default?"selected":""}>${c.code} ${c.symbol}</option>`).join("");
+  app.innerHTML=`<div class="card">
+    <h2>${t("newBooking")}</h2>
+    <p class="muted">${t("dept")}: <b>${deptName(u.dept_id)}</b> · ${t("createdBy")}: <b>${u.full_name}</b></p>
+    <div class="rowflex">
+      <div><label class="f">${t("departure")} *</label><input id="n_dep" class="fld" type="date"></div>
+      <div><label class="f">${t("estPrice")}</label><input id="n_price" class="fld" type="number" min="0" placeholder="0"></div>
+      <div><label class="f">${t("currency")}</label><select id="n_cur" class="fld">${curOpts}</select></div>
+    </div>
+    <label class="f">${t("chooseAgent")} *</label>
+    <select id="n_agent" class="fld"><option value="">${t("none")}</option>${agentOpts}</select>
+    <label class="f">${t("quoteNotes")}</label>
+    <textarea id="n_note" class="fld" rows="2"></textarea>
+    <div class="btnrow">
+      <button class="btn ok" onclick="createBooking()">${t("sendToAgent")}</button>
+    </div>
+    <div id="n_err" class="muted" style="color:var(--danger);margin-top:6px"></div>
+  </div>`;
+}
+function createBooking(){
+  const dep=document.getElementById("n_dep").value;
+  const agentId=document.getElementById("n_agent").value;
+  if(!dep||!agentId){ document.getElementById("n_err").textContent=t("required"); return; }
+  const u=me();
+  const b={ id:uid(), seq:bookingSeq(), dept_id:u.dept_id, initiator_id:u.id,
+    agent_id:agentId, approver_id:deptApprover(u.dept_id), status:"NEW",
+    open_date:new Date().toISOString().slice(0,10), departure_date:dep, ticketing_date:null,
+    price:document.getElementById("n_price").value?Number(document.getElementById("n_price").value):null,
+    currency:document.getElementById("n_cur").value, pnr:null, unique_ref:null,
+    quote_notes:document.getElementById("n_note").value||null, trip_details:null,
+    rejection_reason:null, cancel_reason:null, cancel_requested_by:null, cancel_requested_at:null,
+    files:[], log:[], created_at:Date.now(), updated_at:Date.now() };
+  b.log.push({from:null,to:"NEW",by:u.id,at:Date.now(),note:null});
+  DB.bookings.push(b);
+  changeStatus(b,"AWAITING_QUOTE",null);
+  SES.tab="bookings"; SES.bookingId=b.id; render();
+}
+
+/* ══════════ פירוט הזמנה ══════════ */
+function renderDetail(app,id){
+  const b=DB.bookings.find(x=>x.id===id); if(!b){ SES.bookingId=null; return render(); }
+  const cur=CUR(b.currency);
+  const ag=AG(b.agent_id);
+  const cobrand = ag ? `<div class="cobrand">
+      <img src="assets/arkia-logo.svg" alt="Arkia" onerror="this.style.display='none'">
+      <span class="x">✕</span>
+      <img src="${ag.logo||''}" alt="${ag.agency_name}" onerror="this.style.display='none'">
+      <span class="muted" style="font-size:12px">${t("cobrandNote")}: <b>${ag.agency_name}</b></span>
+    </div>` : "";
+
+  app.innerHTML=`
+  <div class="card">
+    <div class="btnrow" style="margin:0 0 10px"><button class="btn ghost sm" onclick="SES.bookingId=null;render()">← ${t("back")}</button></div>
+    ${cobrand}
+    <h2>${t("details")} #${b.seq} <span class="badge st-${b.status}">${stLabel(b.status)}</span></h2>
+    <div class="grid">
+      <div class="kpi"><div class="l">${t("dept")}</div><div class="n" style="font-size:15px">${deptName(b.dept_id)}</div></div>
+      <div class="kpi"><div class="l">${t("initiator")}</div><div class="n" style="font-size:15px">${userName(b.initiator_id)}</div></div>
+      <div class="kpi"><div class="l">${t("agent")}</div><div class="n" style="font-size:15px">${b.agent_id?agencyName(b.agent_id):t("none")}</div></div>
+      <div class="kpi"><div class="l">${t("approver")}</div><div class="n" style="font-size:15px">${b.approver_id?userName(b.approver_id):t("none")}</div></div>
+      <div class="kpi"><div class="l">${t("openDate")}</div><div class="n" style="font-size:15px">${b.open_date||t("none")}</div></div>
+      <div class="kpi"><div class="l">${t("departure")}</div><div class="n" style="font-size:15px">${b.departure_date||t("none")}</div></div>
+      <div class="kpi"><div class="l">${t("ticketingDate")}</div><div class="n" style="font-size:15px">${b.ticketing_date||t("none")}</div></div>
+      <div class="kpi"><div class="l">${t("price")}</div><div class="n" style="font-size:15px">${b.price!=null?(cur?cur.symbol:"")+Number(b.price).toLocaleString()+" "+b.currency:t("none")}</div></div>
+      <div class="kpi"><div class="l">${t("pnr")}</div><div class="n" style="font-size:15px">${b.pnr||t("none")}</div></div>
+      <div class="kpi"><div class="l">${t("uref")}</div><div class="n" style="font-size:15px">${b.unique_ref||t("none")}</div></div>
+    </div>
+    ${b.trip_details?`<h3>${t("tripDetails")}</h3><div class="muted">${escapeHtml(b.trip_details)}</div>`:""}
+    ${b.quote_notes?`<h3>${t("quoteNotes")}</h3><div class="muted">${escapeHtml(b.quote_notes)}</div>`:""}
+    ${b.rejection_reason?`<h3>${t("reject")} · ${t("reason")}</h3><div class="muted">${escapeHtml(b.rejection_reason)}</div>`:""}
+    ${b.cancel_reason?`<h3>${t("requestCancel")} · ${t("reason")}</h3><div class="muted">${escapeHtml(b.cancel_reason)}</div>`:""}
+    <div id="actions">${renderActions(b)}</div>
+  </div>
+  <div class="card">
+    <h2>${t("files")}</h2>
+    <div id="files">${renderFiles(b)}</div>
+  </div>
+  <div class="card">
+    <h2>${t("timeline")}</h2>
+    <ul class="timeline">${b.log.slice().reverse().map(l=>`
+      <li><span class="dot"></span>
+        <div class="tl-h">${l.from?stLabel(l.from)+" → ":""}${stLabel(l.to)}</div>
+        <div class="tl-m">${t("who")}: ${userName(l.by)} · ${new Date(l.at).toLocaleString(SES.lang==="en"?"en-GB":"he-IL")}</div>
+        ${l.note?`<div class="tl-note">${escapeHtml(l.note)}</div>`:""}
+      </li>`).join("")}</ul>
+  </div>`;
+}
+function renderFiles(b){
+  if(!b.files.length) return `<div class="muted">${t("none")}</div>`;
+  return b.files.map(f=>{
+    const kindLbl=f.kind==="QUOTE_SCREENSHOT"?t("uploadScreenshot"):(f.kind==="FINAL_TICKET"?t("uploadTicket"):"—");
+    const isImg=(f.mime||"").startsWith("image/");
+    return `<div class="filerow">
+      ${isImg?`<img src="${f.dataurl}" alt="">`:"📄"}
+      <div style="flex:1"><b>${kindLbl}</b><br><span class="muted">${escapeHtml(f.name)} · ${userName(f.uploaded_by)}</span></div>
+      <a class="btn ghost sm" href="${f.dataurl}" download="${f.name}">${t("download")}</a>
+      <a class="btn ghost sm" href="${f.dataurl}" target="_blank">${t("view")}</a>
+    </div>`;
+  }).join("");
+}
+function renderActions(b){
+  const u=me(); let h="";
+  const isAgentOfBk = hasRole("AGENT") && agentByUser(u.id) && agentByUser(u.id).id===b.agent_id;
+  const isApprover  = hasRole("APPROVER") && (b.approver_id===u.id || deptApprover(b.dept_id)===u.id);
+  const isInitiator = b.initiator_id===u.id;
+
+  if(b.status==="AWAITING_QUOTE" && isAgentOfBk) h+=`<button class="btn" onclick="showQuoteForm('${b.id}')">${t("submitQuote")}</button>`;
+  if(b.status==="QUOTE_RECEIVED" && isApprover){
+    h+=`<button class="btn ok" onclick="doApprove('${b.id}')">${t("approve")}</button>`;
+    h+=`<button class="btn danger" onclick="doReject('${b.id}')">${t("reject")}</button>`;
+  }
+  if(b.status==="APPROVED" && isAgentOfBk) h+=`<button class="btn" onclick="showTicketForm('${b.id}')">${t("ticket")}</button>`;
+  if(b.status==="CANCEL_REQUESTED" && isAgentOfBk) h+=`<button class="btn warn" onclick="doConfirmCancel('${b.id}')">${t("confirmCancel")}</button>`;
+  // בקשת ביטול — יוזם/מאשר, בכל שלב לא-סופי שאינו כבר בבקשת ביטול
+  if((isInitiator||isApprover) && !STATUSES[b.status].terminal && b.status!=="CANCEL_REQUESTED")
+    h+=`<button class="btn ghost" onclick="doRequestCancel('${b.id}')">${t("requestCancel")}</button>`;
+  return h?`<div class="btnrow">${h}</div>`:"";
+}
+
+/* ── פעולות workflow ── */
+function showQuoteForm(id){
+  const b=DB.bookings.find(x=>x.id===id);
+  const curOpts=DB.currencies.map(c=>`<option value="${c.code}" ${c.code===b.currency?"selected":""}>${c.code} ${c.symbol}</option>`).join("");
+  document.getElementById("actions").innerHTML=`
+    <h3>${t("quoteBy")}</h3>
+    <div class="rowflex">
+      <div><label class="f">${t("price")} *</label><input id="q_price" class="fld" type="number" min="0" value="${b.price??''}"></div>
+      <div><label class="f">${t("currency")}</label><select id="q_cur" class="fld">${curOpts}</select></div>
+    </div>
+    <label class="f">${t("tripDetails")}</label><textarea id="q_trip" class="fld" rows="3">${b.trip_details||""}</textarea>
+    <label class="f">${t("quoteNotes")}</label><textarea id="q_note" class="fld" rows="2">${b.quote_notes||""}</textarea>
+    <label class="f">${t("uploadScreenshot")} *</label><input id="q_file" class="fld" type="file" accept="image/*,application/pdf">
+    <div class="btnrow"><button class="btn ok" onclick="submitQuote('${id}')">${t("submitQuote")}</button>
+      <button class="btn ghost" onclick="render()">${t("cancel")}</button></div>
+    <div id="q_err" style="color:var(--danger);font-size:13px;margin-top:6px"></div>`;
+}
+async function submitQuote(id){
+  const b=DB.bookings.find(x=>x.id===id);
+  const price=document.getElementById("q_price").value;
+  const fileInput=document.getElementById("q_file");
+  if(!price || !fileInput.files.length){ document.getElementById("q_err").textContent=t("required"); return; }
+  const f=fileInput.files[0]; const dataurl=await readFileAsDataURL(f);
+  b.files.push({id:uid(),kind:"QUOTE_SCREENSHOT",name:f.name,mime:f.type,dataurl,uploaded_by:SES.uid,at:Date.now()});
+  b.price=Number(price); b.currency=document.getElementById("q_cur").value;
+  b.trip_details=document.getElementById("q_trip").value||null;
+  b.quote_notes=document.getElementById("q_note").value||null;
+  changeStatus(b,"QUOTE_RECEIVED",null); render();
+}
+function doApprove(id){ const b=DB.bookings.find(x=>x.id===id); changeStatus(b,"APPROVED",null); render(); }
+function doReject(id){ const b=DB.bookings.find(x=>x.id===id);
+  const r=prompt(t("reason")+":"); if(r===null) return; b.rejection_reason=r||null; changeStatus(b,"REJECTED",r||null); render(); }
+function showTicketForm(id){
+  document.getElementById("actions").innerHTML=`
+    <h3>${t("ticketInfo")}</h3>
+    <div class="rowflex">
+      <div><label class="f">${t("pnr")} *</label><input id="tk_pnr" class="fld" placeholder="ABC123"></div>
+      <div><label class="f">${t("uref")} *</label><input id="tk_ref" class="fld"></div>
+      <div><label class="f">${t("ticketingDate")}</label><input id="tk_date" class="fld" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
+    </div>
+    <label class="f">${t("uploadTicket")} *</label><input id="tk_file" class="fld" type="file" accept="image/*,application/pdf">
+    <div class="btnrow"><button class="btn ok" onclick="submitTicket('${id}')">${t("ticket")}</button>
+      <button class="btn ghost" onclick="render()">${t("cancel")}</button></div>
+    <div id="tk_err" style="color:var(--danger);font-size:13px;margin-top:6px"></div>`;
+}
+async function submitTicket(id){
+  const b=DB.bookings.find(x=>x.id===id);
+  const pnr=document.getElementById("tk_pnr").value.trim();
+  const ref=document.getElementById("tk_ref").value.trim();
+  const fileInput=document.getElementById("tk_file");
+  if(!pnr||!ref||!fileInput.files.length){ document.getElementById("tk_err").textContent=t("required"); return; }
+  if(DB.bookings.some(x=>x.id!==id && x.unique_ref===ref)){ document.getElementById("tk_err").textContent="מזהה חד-ערכי כבר קיים / Unique ref exists"; return; }
+  const f=fileInput.files[0]; const dataurl=await readFileAsDataURL(f);
+  b.files.push({id:uid(),kind:"FINAL_TICKET",name:f.name,mime:f.type,dataurl,uploaded_by:SES.uid,at:Date.now()});
+  b.pnr=pnr; b.unique_ref=ref; b.ticketing_date=document.getElementById("tk_date").value||new Date().toISOString().slice(0,10);
+  changeStatus(b,"TICKETED",null); render();
+}
+function doRequestCancel(id){ const b=DB.bookings.find(x=>x.id===id);
+  const r=prompt(t("requestCancel")+" · "+t("reason")+":"); if(r===null) return;
+  b.cancel_reason=r||null; b.cancel_requested_by=SES.uid; b.cancel_requested_at=Date.now();
+  changeStatus(b,"CANCEL_REQUESTED",r||null); render(); }
+function doConfirmCancel(id){ const b=DB.bookings.find(x=>x.id===id); changeStatus(b,"CANCELLED",null); render(); }
+
+/* ══════════ התראות ══════════ */
+function openBell(){ SES.tab="notifications"; SES.bookingId=null; render(); }
+function renderNotifications(app){
+  const list=DB.notifications.filter(n=>n.user_id===SES.uid).sort((a,b)=>b.at-a.at);
+  app.innerHTML=`<div class="card">
+    <div style="display:flex;align-items:center;gap:10px">
+      <h2 style="margin:0;flex:1">${t("notifications")}</h2>
+      <button class="btn ghost sm" onclick="markAllRead()">${t("markRead")}</button>
+    </div>
+    <div style="margin-top:10px">${list.map(n=>`
+      <div class="notif ${n.is_read?"":"unread"}" onclick="openFromNotif('${n.id}')">
+        <span>🔔</span>
+        <div style="flex:1">${escapeHtml(n.message)}<div class="t">${new Date(n.at).toLocaleString(SES.lang==="en"?"en-GB":"he-IL")}</div></div>
+      </div>`).join("")||`<div class="muted">${t("noNotif")}</div>`}</div>
+  </div>`;
+}
+function markAllRead(){ DB.notifications.forEach(n=>{ if(n.user_id===SES.uid) n.is_read=true; }); save(); render(); }
+function openFromNotif(nid){ const n=DB.notifications.find(x=>x.id===nid); if(n){ n.is_read=true; save();
+  if(n.booking_id){ const b=DB.bookings.find(x=>x.seq==n.booking_id||x.id===n.booking_id); if(b){ SES.tab="bookings"; SES.bookingId=b.id; } } } render(); }
+
+/* ══════════ כספים ══════════ */
+const FIN_FIELDS=[
+  ["seq","#"],["status","status"],["dept","dept"],["initiator","initiator"],["agent","agent"],
+  ["approver","approver"],["open_date","openDate"],["departure_date","departure"],["ticketing_date","ticketingDate"],
+  ["price","price"],["currency","currency"],["pnr","pnr"],["unique_ref","uref"]
+];
+function bkField(b,key){
+  switch(key){
+    case "seq": return b.seq;
+    case "status": return stLabel(b.status);
+    case "dept": return deptName(b.dept_id);
+    case "initiator": return userName(b.initiator_id);
+    case "agent": return b.agent_id?agencyName(b.agent_id):"";
+    case "approver": return b.approver_id?userName(b.approver_id):"";
+    case "price": return b.price!=null?b.price:"";
+    case "currency": return b.currency;
+    default: return b[key]!=null?b[key]:"";
+  }
+}
+function renderFinance(app){
+  const all=DB.bookings.slice().sort((a,b)=>a.seq-b.seq);
+  const openCnt=all.filter(b=>!STATUSES[b.status].terminal).length;
+  const tk=all.filter(b=>b.status==="TICKETED").length;
+  const cn=all.filter(b=>b.status==="CANCELLED").length;
+  // סכומים לפי מטבע (רק כורטסו)
+  const sums={}; all.filter(b=>b.status==="TICKETED"&&b.price!=null).forEach(b=>{ sums[b.currency]=(sums[b.currency]||0)+Number(b.price); });
+  const sumCards=Object.keys(sums).map(c=>`<div class="kpi"><div class="l">${c} (${t("ticketed")})</div><div class="n">${(CUR(c)?CUR(c).symbol:"")+sums[c].toLocaleString()}</div></div>`).join("");
+
+  app.innerHTML=`
+  <div class="card">
+    <h2>${t("finance")}</h2>
+    <div class="grid">
+      <div class="kpi"><div class="l">${t("total")}</div><div class="n">${all.length}</div></div>
+      <div class="kpi"><div class="l">${t("open")}</div><div class="n">${openCnt}</div></div>
+      <div class="kpi"><div class="l">${t("ticketed")}</div><div class="n">${tk}</div></div>
+      <div class="kpi"><div class="l">${t("cancelled")}</div><div class="n">${cn}</div></div>
+      ${sumCards}
+    </div>
+    <div class="btnrow"><button class="btn ghost sm" onclick="exportCSV()">⬇ ${t("exportExcel")}</button></div>
+    <div class="tablewrap" style="margin-top:10px"><table><thead><tr>
+      <th>#</th><th>${t("status")}</th><th>${t("dept")}</th><th>${t("initiator")}</th><th>${t("agent")}</th>
+      <th>${t("openDate")}</th><th>${t("departure")}</th><th>${t("ticketingDate")}</th><th>${t("price")}</th><th>${t("pnr")}</th>
+    </tr></thead><tbody>${all.map(b=>`<tr onclick="openBk('${b.id}')">
+      <td>${b.seq}</td><td><span class="badge st-${b.status}">${stLabel(b.status)}</span></td>
+      <td>${deptName(b.dept_id)}</td><td>${userName(b.initiator_id)}</td><td>${b.agent_id?agencyName(b.agent_id):t("none")}</td>
+      <td>${b.open_date||""}</td><td>${b.departure_date||""}</td><td>${b.ticketing_date||""}</td>
+      <td>${b.price!=null?(CUR(b.currency)?CUR(b.currency).symbol:"")+Number(b.price).toLocaleString():""}</td><td>${b.pnr||""}</td>
+    </tr>`).join("")||`<tr><td colspan="10" class="muted">${t("noBookings")}</td></tr>`}</tbody></table></div>
+  </div>
+  <div class="card">
+    <h2>${t("reportBuilder")}</h2>
+    <label class="f">${t("templateName")}</label><input id="tpl_name" class="fld" placeholder="${t("templateName")}">
+    <label class="f">${t("selectFields")}</label>
+    <div class="checkgrid">${FIN_FIELDS.map(([k,lbl])=>`<label><input type="checkbox" class="tplf" value="${k}" checked> ${t(lbl)||lbl}</label>`).join("")}</div>
+    <div class="btnrow"><button class="btn sm" onclick="createTemplate()">${t("createTemplate")}</button></div>
+    <div id="tpl_list" style="margin-top:10px">${renderTemplates()}</div>
+    <div id="tpl_out"></div>
+  </div>`;
+}
+function renderTemplates(){
+  const list=DB.templates.filter(x=>x.owner_id===SES.uid||x.shared);
+  if(!list.length) return `<div class="muted">${t("myTemplates")}: ${t("none")}</div>`;
+  return `<h3>${t("myTemplates")}</h3>`+list.map(x=>`<div class="filerow">
+    <span class="pill">${escapeHtml(x.name)}</span>
+    <span class="muted" style="flex:1">${x.columns.map(c=>{const f=FIN_FIELDS.find(y=>y[0]===c);return f?t(f[1])||f[1]:c;}).join(", ")}</span>
+    <button class="btn ghost sm" onclick="runTemplate('${x.id}')">${t("runTemplate")}</button>
+  </div>`).join("");
+}
+function createTemplate(){
+  const name=document.getElementById("tpl_name").value.trim();
+  const cols=[...document.querySelectorAll(".tplf:checked")].map(c=>c.value);
+  if(!name||!cols.length){ alert(t("required")); return; }
+  DB.templates.push({id:uid(),name,owner_id:SES.uid,columns:cols,shared:false,created_at:Date.now()});
+  save(); document.getElementById("tpl_name").value=""; document.getElementById("tpl_list").innerHTML=renderTemplates();
+}
+function runTemplate(id){
+  const tpl=DB.templates.find(x=>x.id===id); if(!tpl) return;
+  const all=DB.bookings.slice().sort((a,b)=>a.seq-b.seq);
+  const heads=tpl.columns.map(c=>{const f=FIN_FIELDS.find(y=>y[0]===c);return `<th>${f?t(f[1])||f[1]:c}</th>`;}).join("");
+  const rows=all.map(b=>`<tr onclick="openBk('${b.id}')">${tpl.columns.map(c=>`<td>${bkField(b,c)}</td>`).join("")}</tr>`).join("");
+  document.getElementById("tpl_out").innerHTML=`<h3>${escapeHtml(tpl.name)}</h3>
+    <div class="btnrow"><button class="btn ghost sm" onclick="exportTemplateCSV('${id}')">⬇ ${t("exportExcel")}</button></div>
+    <div class="tablewrap" style="margin-top:8px"><table><thead><tr>${heads}</tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+function csvEscape(v){ v=String(v==null?"":v); return /[",\n]/.test(v)?'"'+v.replace(/"/g,'""')+'"':v; }
+function downloadCSV(filename,header,rows){
+  const csv="﻿"+[header.join(","),...rows.map(r=>r.map(csvEscape).join(","))].join("\n");
+  const blob=new Blob([csv],{type:"text/csv;charset=utf-8"}); const url=URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download=filename; a.click(); URL.revokeObjectURL(url);
+}
+function exportCSV(){
+  const all=DB.bookings.slice().sort((a,b)=>a.seq-b.seq);
+  const cols=FIN_FIELDS.map(f=>f[0]); const header=FIN_FIELDS.map(f=>t(f[1])||f[1]);
+  downloadCSV("bookings.csv",header,all.map(b=>cols.map(c=>bkField(b,c))));
+}
+function exportTemplateCSV(id){
+  const tpl=DB.templates.find(x=>x.id===id); if(!tpl) return;
+  const all=DB.bookings.slice().sort((a,b)=>a.seq-b.seq);
+  const header=tpl.columns.map(c=>{const f=FIN_FIELDS.find(y=>y[0]===c);return f?t(f[1])||f[1]:c;});
+  downloadCSV((tpl.name||"report")+".csv",header,all.map(b=>tpl.columns.map(c=>bkField(b,c))));
+}
+
+/* ══════════ ניהול ══════════ */
+function renderAdmin(app){
+  app.innerHTML=`
+  <div class="card"><h2>${t("departments")}</h2>
+    <div class="tablewrap"><table><thead><tr><th>${t("name")}</th><th>code</th><th>${t("active")}</th></tr></thead>
+    <tbody>${DB.departments.map(d=>`<tr><td>${SES.lang==="en"?d.name_en:d.name_he}</td><td>${d.code}</td><td>${d.active?"✔":"—"}</td></tr>`).join("")}</tbody></table></div>
+    <div class="rowflex" style="margin-top:8px">
+      <div><input id="ad_dcode" class="fld" placeholder="code"></div>
+      <div><input id="ad_dhe" class="fld" placeholder="שם (עברית)"></div>
+      <div><input id="ad_den" class="fld" placeholder="Name (English)"></div>
+      <div style="flex:0"><button class="btn sm" onclick="addDept()">${t("add")}</button></div>
+    </div>
+  </div>
+  <div class="card"><h2>${t("users")}</h2>
+    <div class="tablewrap"><table><thead><tr><th>username</th><th>${t("name")}</th><th>${t("dept")}</th><th>${t("roles")}</th><th>${t("email")}</th><th></th></tr></thead>
+    <tbody>${DB.users.map(u=>`<tr><td>${u.username}</td><td>${u.full_name}</td><td>${u.dept_id?deptName(u.dept_id):t("none")}</td>
+      <td>${u.roles.map(r=>`<span class="pill">${t("role_"+r)}</span>`).join(" ")}</td><td class="muted">${u.email}</td>
+      <td><button class="btn ghost sm" onclick="changePw('${u.id}')">${t("changePw")}</button></td></tr>`).join("")}</tbody></table></div>
+    <h3>${t("add")} ${t("users")}</h3>
+    <div class="rowflex">
+      <div><input id="au_un" class="fld" placeholder="username"></div>
+      <div><input id="au_fn" class="fld" placeholder="${t("name")}"></div>
+      <div><input id="au_em" class="fld" placeholder="${t("email")}"></div>
+    </div>
+    <div class="rowflex">
+      <div><select id="au_dept" class="fld"><option value="">${t("none")}</option>${DB.departments.map(d=>`<option value="${d.id}">${SES.lang==="en"?d.name_en:d.name_he}</option>`).join("")}</select></div>
+      <div><select id="au_role" class="fld">${["INITIATOR","APPROVER","AGENT","FINANCE","ADMIN"].map(r=>`<option value="${r}">${t("role_"+r)}</option>`).join("")}</select></div>
+      <div style="flex:0"><button class="btn sm" onclick="addUser()">${t("add")}</button></div>
+    </div>
+  </div>
+  <div class="card"><h2>${t("agents")}</h2>
+    <div class="tablewrap"><table><thead><tr><th>${t("agency")}</th><th>user</th><th>${t("logo")}</th></tr></thead>
+    <tbody>${DB.agents.map(a=>`<tr><td>${a.agency_name}</td><td>${userName(a.user_id)}</td>
+      <td>${a.logo?`<img src="${a.logo}" style="height:24px" onerror="this.replaceWith('—')">`:"—"}</td></tr>`).join("")}</tbody></table></div>
+  </div>
+  <div class="card"><h2>${t("currencies")}</h2>
+    <div class="tablewrap"><table><thead><tr><th>code</th><th>${t("name")}</th><th>symbol</th><th>default</th></tr></thead>
+    <tbody>${DB.currencies.map(c=>`<tr><td>${c.code}</td><td>${SES.lang==="en"?c.name_en:c.name_he}</td><td>${c.symbol}</td><td>${c.is_default?"✔":""}</td></tr>`).join("")}</tbody></table></div>
+  </div>`;
+}
+function addDept(){
+  const code=document.getElementById("ad_dcode").value.trim();
+  const he=document.getElementById("ad_dhe").value.trim();
+  const en=document.getElementById("ad_den").value.trim();
+  if(!code||!he){ alert(t("required")); return; }
+  DB.departments.push({id:uid(),code,name_he:he,name_en:en||he,active:true}); save(); render();
+}
+function addUser(){
+  const un=document.getElementById("au_un").value.trim();
+  const fn=document.getElementById("au_fn").value.trim();
+  const em=document.getElementById("au_em").value.trim();
+  const dept=document.getElementById("au_dept").value||null;
+  const role=document.getElementById("au_role").value;
+  if(!un||!fn){ alert(t("required")); return; }
+  if(DB.users.some(u=>u.username.toLowerCase()===un.toLowerCase())){ alert("username exists"); return; }
+  const u={id:uid(),username:un,full_name:fn,email:em,dept_id:dept,roles:[role],pref_lang:"HE",active:true,password:"Arkia2026!"};
+  DB.users.push(u);
+  if(role==="AGENT") DB.agents.push({id:uid(),user_id:u.id,agency_name:fn,logo:""});
+  if(role==="APPROVER"&&dept) DB.approvers.push({dept_id:dept,user_id:u.id});
+  save(); render();
+}
+function changePw(uid_){ const u=U(uid_); if(!u) return; const p=prompt(t("changePw")+" ("+u.username+"):"); if(p){ u.password=p; save(); alert(t("saved")); } }
+
+/* ── util ── */
+function escapeHtml(s){ return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* ══════════ init ══════════ */
+load();
+renderLock();
+document.getElementById("unlockBtn").onclick=doLogin;
+document.getElementById("lk_pw").addEventListener("keydown",e=>{ if(e.key==="Enter") doLogin(); });
+document.getElementById("langBtn").onclick=toggleLang;
+document.getElementById("logoutBtn").onclick=logout;
+document.getElementById("bellBtn").onclick=openBell;
+// כפתור שפה במסך ההתחברות (לחיצה על הכותרת מחליפה)
+</script>
+</body>
+</html>
